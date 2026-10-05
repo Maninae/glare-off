@@ -10,9 +10,9 @@ flowchart LR
   B -->|strips, INTER_AREA port, long side <= 1024| D[YuNet on WASM]
   D -->|eye centers, by image x| C[512x256 eye crop per face]
   C --> M[glare model: WebGPU or WASM]
-  M -->|delta = mask x clean - input| W[warp back to photo region]
-  W --> P[page: blend at strength, preview, compare]
-  P -->|patches| E[worker: re-decode original, paste patches, encode]
+  M -->|crop-space delta + mask, region rect| P[page: face results stay crop-space]
+  P -->|visible photo only| V[region cache: original bytes + warped delta; blend at strength]
+  P -->|faces switched on + strength| E[worker: re-decode, re-read regions, warp, blend, paste, encode]
 ```
 
 ## Module map
@@ -20,24 +20,27 @@ flowchart LR
 | Path | Owns |
 |---|---|
 | `index.html` | Page shell, the CSP meta tag (commented in place), every static DOM node, the result-card `<template>`. |
-| `js/main.js` | Wiring: service-worker control, runtime choice, engine start, the sequential photo queue, downloads and "Download all", `window.__glareOffDebug` (test hook). |
+| `js/main.js` | Wiring: service-worker control, runtime choice, engine start, the sequential photo queue, the visible-photo region cache, downloads and "Download all". |
+| `js/debug_hook.js` | `window.__glareOffDebug` (e2e test hook), installed only with `?debug` in the URL: state, timings, on-demand warped masks, a memory description. |
 | `js/app_config.js` | Product name, model and runtime paths, switches (`HIGH_RES_PASS_ENABLED`), export qualities. |
 | `js/eye_crop_geometry.js` | **Contract.** Line-for-line port of `eye_crop/eye_crop_geometry.py` (affine, scale, inverse). |
-| `js/pipeline/glare_worker.js` | The module worker: loads ORT + both sessions, decodes photos, reads pixels in strips/regions, runs detection and face passes, exports. |
+| `js/pipeline/glare_worker.js` | The module worker: loads ORT + both sessions, decodes photos, reads pixels in strips/regions, runs detection and face passes, re-reads regions for the page (`read-regions`), exports. |
 | `js/pipeline/worker_client.js` | Main-thread side: blob bootstrap (so the CSP governs the worker), request ids to Promises, terminate. |
-| `js/pipeline/runtime_choice.js` | WebGPU (real adapters only) vs WASM; thread count; which devices free memory between batches. |
+| `js/pipeline/runtime_choice.js` | WebGPU (real adapters only) vs WASM; thread count (iPhone/iPad 1, other mobile <= 2); which devices free memory between batches. |
 | `js/pipeline/yunet_face_decode.js` | YuNet pre/post-processing ported from OpenCV FaceDetectorYN (pad to 32, BGR 0-255, anchor decode, sqrt(cls*obj), integer-box NMS). |
 | `js/pipeline/area_downscale.js` | OpenCV INTER_AREA port, streamed over row strips (the detector's downscale for big photos). |
 | `js/pipeline/eye_crop_warp.js` | Photo -> crop (bilinear, reflect-101) and crop layers -> photo region (bilinear, zero border). |
-| `js/pipeline/glare_crop_pass.js` | One face: crop, model, crop-space delta with the mask floor, optional 2x pass, warp back. |
+| `js/pipeline/glare_crop_pass.js` | One face: crop, model, crop-space delta with the half-level cut, optional 2x pass. Returns crop-space layers + the region rect only. |
 | `js/blend/face_patch_blend.js` | `round(original + strength * 255 * delta)`; zero delta keeps the exact byte. |
+| `js/blend/face_region_patch.js` | On-demand warp of a face's crop-space delta/mask to its photo region, and the full-res patch (used by the cache, the export and the test hook). |
 | `js/photo/photo_file_types.js` | Format sniffing (HEIC etc.), output format choice, download names. |
-| `js/photo/photo_compose.js` | Full-res patches, the composed "after" preview, region canvases for the eye zoom. |
+| `js/photo/photo_compose.js` | Full-res patches from the region cache, the composed "after" preview, region canvases for the eye zoom. |
+| `js/photo/visible_photo_regions.js` | The ONE-photo cache of full-res region bytes + warped deltas (the photo last landed or touched); switching photos drops it and re-reads through a worker. |
 | `js/photo/zip_store.js` | STORE-only ZIP writer with CRC-32 for "Download all". |
 | `js/ui/input_doors.js` | File picker, whole-page drag-and-drop, paste. |
 | `js/ui/engine_status.js` | The status line: real-MB download progress, ready, error with Try again. |
 | `js/ui/compare_view.js` | Before/after canvases, the lens divider, the transparent range input that drives it, the one sweep animation. |
-| `js/ui/result_card.js` | One photo: states, view picker (whole photo / eyes up close), strength, per-face toggles, lost-detail note, Download. |
+| `js/ui/result_card.js` | One photo: states, view picker (whole photo / eyes up close), strength, per-face toggles, lost-detail note, Download. Redraws are async (they may wait for a region re-read). |
 | `sw.js` | Service worker: shell precache, runtime caching of models and ORT, COOP/COEP/CORP headers on everything it serves. |
 | `asset_manifest.json` | Generated list of every served file with sizes; feeds the SW precache, the cache version and the progress bar. |
 | `styles/tokens.css`, `page.css`, `results.css` | Tokens (the only color values, light and dark), page chrome, the results. |
@@ -49,7 +52,8 @@ flowchart LR
 
 - **No other origin, ever.** CSP `default-src 'none'`, `connect-src 'self'`. The page's privacy sentence ("makes no network requests after it loads") is pinned by the e2e test; any change that makes it false is out of scope.
 - **The worker must start from the blob bootstrap** in `worker_client.js`. A worker loaded from its own URL takes its CSP from HTTP headers, and static hosts send none.
-- **Untouched pixels stay byte-identical.** Crop-space glare mask values below 0.5/255 are forced to 0, so the warped delta is exactly 0 outside the mask and `blendFacePatch` leaves those bytes alone. Downloads are a fresh decode of the original with only the patched regions pasted.
+- **Untouched pixels stay byte-identical.** A crop pixel whose mask is below 0.5/255, or whose `mask * (clean - crop)` is below half a level on all three channels, gets delta 0 and mask 0 (and does not count toward "glare found" or the lost-detail note). So an idle mask head (~0.02 everywhere) touches nothing by construction, the warped delta is exactly 0 outside the mask, and `blendFacePatch` leaves those bytes alone. Downloads are a fresh decode of the original with only the patched regions pasted.
+- **Per-photo memory does not scale with the photo.** Face results keep crop-space layers only (~2 MB per glare face at 512x256). Full-res region bytes and warped deltas (~16 B per region pixel) exist for one photo at a time (`visible_photo_regions.js`) and inside the worker during an export. The e2e test asserts no face result holds a region-size array.
 - **Faithful ports.** Geometry, YuNet decode, INTER_AREA and the warps reproduce the Python/OpenCV reference. Change the Python first, regenerate fixtures, re-run the parity tests; never "improve" the JS alone. One non-obvious detail: OpenCV takes the rotation center as float32, so the JS rounds it with `Math.fround`.
 - **Nothing depends on the glare model's behavior.** The app reads only the contract shapes; the stub and the trained model are interchangeable.
 - **No pixels in storage.** Photos live in memory only (worker bitmaps, page canvases). Nothing goes to localStorage or IndexedDB.
@@ -60,7 +64,7 @@ flowchart LR
 
 - **Build choice:** WebGPU build only when `requestAdapter()` returns a real GPU. Software fallbacks (SwiftShader, `isFallbackAdapter`) are refused: in testing they ran the model ~50x slower than threaded WASM. Otherwise the CPU-only build (14 MB vs 27 MB of WASM). If the WebGPU session fails to create, the same build runs on its CPU path. `?backend=wasm|webgpu` overrides.
 - **YuNet always on WASM** (its input size changes per photo; on WebGPU every size recompiles shaders).
-- **Multithreading: yes, via our own service worker, without a reload.** `sw.js` adds COOP/COEP to everything it serves, so from the second visit the page is cross-origin isolated and ORT uses up to 4 threads. Measured gain: ~2.2x per face. The usual coi-serviceworker shim forces a reload on first visit; we skip that, so the first visit simply runs one thread. iPhone/iPad stay at one thread (Safari tab memory limits).
+- **Multithreading: yes, via our own service worker, without a reload.** `sw.js` adds COOP/COEP to everything it serves, so from the second visit the page is cross-origin isolated and ORT uses up to 4 threads. Measured gain: ~2.2x per face. The usual coi-serviceworker shim forces a reload on first visit; we skip that, so the first visit simply runs one thread. iPhone/iPad stay at one thread (Safari tab memory limits); every other mobile user agent is capped at 2. `?threads=N` overrides (uncapped, tests only).
 - **Memory:** on phones, small tablets and devices reporting <= 4 GB, the worker is terminated when the queue drains (the only way to free a WASM heap); downloads then use a model-free worker. ORT memory arenas are off.
 - **Big photos:** the worker never holds a full-size pixel buffer. Detection streams 128-row strips through the INTER_AREA port; crops read only their source region. Export needs one full-size canvas (browser canvas limits apply, see Known limits).
 
@@ -104,7 +108,7 @@ cd app
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000/`. Query flags: `?backend=wasm|webgpu`, `?threads=N`, `?nosw` (no service worker), `?hires` (2x crop pass), `?keepworker` (never free the engine).
+Open `http://localhost:8000/`. Query flags: `?backend=wasm|webgpu`, `?threads=N`, `?nosw` (no service worker), `?hires` (2x crop pass), `?keepworker` (never free the engine), `?debug` (install the test hook).
 
 ## Tests (all in `tests/app/`, plain scripts that print PASS/FAIL and exit non-zero on failure)
 
@@ -115,9 +119,9 @@ Tools live outside the repo: `npm install --no-save --prefix /Volumes/vega/datas
 | `python -m tests.app.generate_app_fixtures` | Writes committed parity fixtures (`tests/app/fixtures/`) and private YuNet references (vega). |
 | `node tests/app/test_eye_crop_geometry_parity.mjs` | Affine == Python to 1e-6 (46 eye pairs, 1x and 2x); INTER_AREA within 1 level of cv2; crop warp and warp-back vs cv2. |
 | `node tests/app/test_yunet_decode_parity.mjs` | JS YuNet decode vs OpenCV FaceDetectorYN on identical pixels (eye centers, scores, every box/landmark). |
-| `node tests/app/test_blend_and_zip.mjs` | Blend bit-exactness, the whole face pass with a fake model, the 2x pass switch, the ZIP writer (`unzip -t`). |
+| `node tests/app/test_blend_and_zip.mjs` | Blend bit-exactness, the whole face pass with a fake model (incl. an idle 0.02 mask with a sub-half-level delta: zero changed pixels), crop-size-only face results, the 2x pass switch, the ZIP writer (`unzip -t`). |
 | `python -m tests.app.make_browser_test_photos` | Private e2e photos on vega (PNG copies, EXIF-rotated JPEG, 27 MP JPEG) + Python detections. |
-| `node tests/app/test_app_end_to_end.mjs` | Real headless Chromium: all photos, Python parity, full-res downloads, PNG bit-exactness, zero foreign and zero post-ready requests, CSP blocking, SW isolation + threads, offline, WebGPU on the real GPU, screenshots (`/tmp/glare-off-e2e/`) and `summary.json` with timings. |
+| `node tests/app/test_app_end_to_end.mjs` | Real headless Chromium (`?debug` on every load): all photos, Python parity, full-res downloads, PNG bit-exactness, memory (no region-size arrays in face results, one-photo region cache, heap after GC), zero foreign and zero post-ready requests, CSP blocking, no test hook without `?debug`, SW isolation + threads, offline, WebGPU on the real GPU, screenshots (`/tmp/glare-off-e2e/`) and `summary.json` with timings. |
 | `python -m tests.app.make_yunet_dynamic_input_model` | Regenerates the served YuNet (symbolic H/W) and checks it against the stock file. |
 | `python -m tests.app.sync_asset_manifest [--check]` | Regenerates (or verifies) `asset_manifest.json` and the `sw.js` version. |
 

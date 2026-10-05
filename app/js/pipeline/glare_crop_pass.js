@@ -7,18 +7,22 @@
  *
  * Contract (CLAUDE.md "Model I/O"): delta = glare_mask * (clean_crop - glare_crop) in crop
  * space, warped back through the crop affine and added to the ORIGINAL photo pixels.
- * - Crop-space glare mask values below GLARE_MASK_ZERO_BELOW are forced to 0, so "outside
- *   the mask" is exact and the untouched photo stays bit-identical (see face_patch_blend.js).
+ * - A crop pixel whose delta is under half an 8-bit level on all three channels gets delta 0
+ *   and mask 0, so pixels the model barely touched (its mask head idles near 0.02) are exactly
+ *   untouched by construction, not by rounding (see face_patch_blend.js).
+ * - The face result keeps only crop-space layers (resolution independent, ~2 MB per face);
+ *   the photo-region warp happens on demand (blend/face_region_patch.js).
  * - When the crop is a big downscale of the photo (crop scale < HIGH_RES_SCALE_THRESHOLD),
  *   an optional second pass at 2x crop size can replace the first; off by default
  *   (HIGH_RES_PASS_ENABLED in app_config.js) until the model is trained at that size.
  */
 
 import { computePhotoToEyeCropAffine, eyeCropScale, EYE_CROP_HEIGHT, EYE_CROP_WIDTH } from "../eye_crop_geometry.js";
-import { computePhotoRegionCoveredByEyeCrop, computeSourceRegionForEyeCrop, extractEyeCropFromRegion, warpCropLayersBackToRegion } from "./eye_crop_warp.js";
+import { computePhotoRegionCoveredByEyeCrop, computeSourceRegionForEyeCrop, extractEyeCropFromRegion } from "./eye_crop_warp.js";
 
-// Half a level of 8-bit: anything below cannot move a pixel, so it is treated as no glare.
+// Half a level of 8-bit: a mask or a per-pixel change below this cannot move a byte, so it is no glare.
 export const GLARE_MASK_ZERO_BELOW = 0.5 / 255;
+export const DELTA_ZERO_BELOW = 0.5 / 255;
 const MASK_ON_THRESHOLD = 0.5;
 // A face counts as having glare when this share of the 512x256 crop is masked (~60 px).
 const GLARE_PRESENT_MIN_FRACTION = 0.0005;
@@ -31,27 +35,38 @@ export function chooseCropSizeMultiplier(photoToEyeCropAffine1x, highResPassEnab
   return highResPassEnabled && eyeCropScale(photoToEyeCropAffine1x) < HIGH_RES_SCALE_THRESHOLD ? 2 : 1;
 }
 
-/** Glare-model outputs -> crop-space delta layers, cleaned glare mask, lost-detail mask, counts. */
+/**
+ * Glare-model outputs -> crop-space delta layers, cleaned glare mask, lost-detail mask, counts.
+ *
+ * A pixel is "touched" only when its mask is >= GLARE_MASK_ZERO_BELOW AND at least one channel
+ * of glare_mask * (clean - crop) reaches DELTA_ZERO_BELOW; everywhere else delta, glare mask and
+ * lost-detail mask are exactly 0, and the pixel counts toward neither "glare found" nor the note.
+ */
 export function computeCropSpaceDelta({ cropPlanarRgb, cleanPlanarRgb, masksPlanar, cropWidth, cropHeight }) {
   const planeSize = cropWidth * cropHeight;
   const deltaLayers = [new Float32Array(planeSize), new Float32Array(planeSize), new Float32Array(planeSize)];
   const glareMask = new Float32Array(planeSize);
   const lostDetailMask = new Float32Array(planeSize);
+  const channelDeltas = [0, 0, 0];
   let glarePixelCount = 0;
   let lostDetailPixelCount = 0;
   for (let index = 0; index < planeSize; index += 1) {
     const rawGlare = masksPlanar[index];
-    const glare = rawGlare >= GLARE_MASK_ZERO_BELOW ? Math.min(rawGlare, 1) : 0;
-    const lost = Math.max(0, Math.min(masksPlanar[planeSize + index], 1)) * (glare > 0 ? 1 : 0);
-    glareMask[index] = glare;
-    lostDetailMask[index] = lost;
-    if (glare >= MASK_ON_THRESHOLD) glarePixelCount += 1;
-    if (lost >= MASK_ON_THRESHOLD) lostDetailPixelCount += 1;
-    if (glare === 0) continue;
+    if (!(rawGlare >= GLARE_MASK_ZERO_BELOW)) continue;
+    const glare = Math.min(rawGlare, 1);
+    let movesAByte = false;
     for (let channel = 0; channel < 3; channel += 1) {
       const planeIndex = channel * planeSize + index;
-      deltaLayers[channel][index] = glare * (cleanPlanarRgb[planeIndex] - cropPlanarRgb[planeIndex]);
+      channelDeltas[channel] = glare * (cleanPlanarRgb[planeIndex] - cropPlanarRgb[planeIndex]);
+      if (Math.abs(channelDeltas[channel]) >= DELTA_ZERO_BELOW) movesAByte = true;
     }
+    if (!movesAByte) continue;
+    const lost = Math.max(0, Math.min(masksPlanar[planeSize + index], 1));
+    glareMask[index] = glare;
+    lostDetailMask[index] = lost;
+    for (let channel = 0; channel < 3; channel += 1) deltaLayers[channel][index] = channelDeltas[channel];
+    if (glare >= MASK_ON_THRESHOLD) glarePixelCount += 1;
+    if (lost >= MASK_ON_THRESHOLD) lostDetailPixelCount += 1;
   }
   return { deltaLayers, glareMask, lostDetailMask, glarePixelCount, lostDetailPixelCount };
 }
@@ -61,7 +76,7 @@ async function runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runG
   const cropHeight = EYE_CROP_HEIGHT * cropSizeMultiplier;
   const photoToEyeCropAffine = computePhotoToEyeCropAffine(face.imageLeftEyeXY, face.imageRightEyeXY, cropWidth, cropHeight);
   const sourceRegion = computeSourceRegionForEyeCrop(photoToEyeCropAffine, cropWidth, cropHeight, photoWidth, photoHeight);
-  const { cropRgba, cropPlanarRgb } = extractEyeCropFromRegion({
+  const { cropPlanarRgb } = extractEyeCropFromRegion({
     regionRgba: readPhotoRegion(sourceRegion),
     region: sourceRegion,
     photoWidth,
@@ -72,7 +87,7 @@ async function runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runG
   });
   const { cleanPlanarRgb, masksPlanar } = await runGlareModel(cropPlanarRgb, cropWidth, cropHeight);
   const cropDelta = computeCropSpaceDelta({ cropPlanarRgb, cleanPlanarRgb, masksPlanar, cropWidth, cropHeight });
-  return { cropWidth, cropHeight, cropSizeMultiplier, photoToEyeCropAffine, cropRgba, ...cropDelta };
+  return { cropWidth, cropHeight, cropSizeMultiplier, photoToEyeCropAffine, ...cropDelta };
 }
 
 /**
@@ -80,8 +95,10 @@ async function runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runG
  *
  * Returns:
  *   { hasGlare, showLostDetailNote, glareFraction, lostDetailFraction, cropSizeMultiplier,
- *     photoToEyeCropAffine, region, regionOriginalRgba, regionDeltaLayers: [R, G, B] (0..1 units),
- *     regionGlareMask, regionLostDetailMask }   (region* are null when the face has no glare)
+ *     photoToEyeCropAffine, cropWidth, cropHeight, region,
+ *     cropDeltaLayers: [R, G, B] (0..1 units), cropGlareMask }
+ *   region and the crop* layers are null when the face has no glare. Nothing here is the size
+ *   of the photo region; blend/face_region_patch.js warps on demand.
  */
 export async function runGlarePassOnFace({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, highResPassEnabled = false }) {
   const affine1x = computePhotoToEyeCropAffine(face.imageLeftEyeXY, face.imageRightEyeXY);
@@ -100,31 +117,14 @@ export async function runGlarePassOnFace({ face, photoWidth, photoHeight, readPh
     lostDetailFraction,
     cropSizeMultiplier: pass.cropSizeMultiplier,
     photoToEyeCropAffine: pass.photoToEyeCropAffine,
-    cropRgba: pass.cropRgba,
     cropWidth: pass.cropWidth,
     cropHeight: pass.cropHeight,
     region: null,
-    regionOriginalRgba: null,
-    regionDeltaLayers: null,
-    regionGlareMask: null,
-    regionLostDetailMask: null,
+    cropDeltaLayers: null,
+    cropGlareMask: null,
   };
   if (!summary.hasGlare) return summary;
   const region = computePhotoRegionCoveredByEyeCrop(pass.photoToEyeCropAffine, pass.cropWidth, pass.cropHeight, photoWidth, photoHeight);
   if (!region) return { ...summary, hasGlare: false };
-  const [deltaRed, deltaGreen, deltaBlue, regionGlareMask, regionLostDetailMask] = warpCropLayersBackToRegion({
-    cropLayers: [...pass.deltaLayers, pass.glareMask, pass.lostDetailMask],
-    cropWidth: pass.cropWidth,
-    cropHeight: pass.cropHeight,
-    photoToEyeCropAffine: pass.photoToEyeCropAffine,
-    region,
-  });
-  return {
-    ...summary,
-    region,
-    regionOriginalRgba: readPhotoRegion(region),
-    regionDeltaLayers: [deltaRed, deltaGreen, deltaBlue],
-    regionGlareMask,
-    regionLostDetailMask,
-  };
+  return { ...summary, region, cropDeltaLayers: pass.deltaLayers, cropGlareMask: pass.glareMask };
 }

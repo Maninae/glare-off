@@ -8,8 +8,9 @@
  * via import.meta.url, so no wasmPaths juggling; we pass the .wasm bytes ourselves
  * (env.wasm.wasmBinary) so the download shows real progress.
  *
- * Protocol (page -> worker): init, process-photo, export-photo. Worker -> page: progress,
- * ready | init-failed, stage, result, exported, error. Every reply carries the requestId.
+ * Protocol (page -> worker): init, process-photo, read-regions, export-photo. Worker -> page:
+ * progress, ready | init-failed, stage, result, regions, exported, error. Every reply carries
+ * the requestId. read-regions and export-photo need no models (a model-free worker serves them).
  *
  * - YuNet always runs on the WASM CPU path (its input size changes per photo, which would
  *   recompile GPU shaders every time); the glare model uses WebGPU when the page chose it.
@@ -20,6 +21,7 @@
 import { computeDetectionSize, buildYunetInputTensor, decodeYunetOutputs, faceRowsToDetectedFaceEyes } from "./yunet_face_decode.js";
 import { areaDownscaleRgba } from "./area_downscale.js";
 import { runGlarePassOnFace } from "./glare_crop_pass.js";
+import { buildFullResolutionFacePatch } from "../blend/face_region_patch.js";
 
 let onnxRuntime = null;
 let faceDetectorSession = null;
@@ -187,6 +189,8 @@ async function processPhoto({ requestId, file, previewLongSide, highResPassEnabl
     const detectedFaces = await detectFaces(photoBitmap, readPhotoRegion);
     timings.detectMs = performance.now() - started;
     const faces = [];
+    // The visible photo's region cache adopts these right away; faces themselves stay crop-space.
+    const regionOriginalRgbaByFace = [];
     const transfer = [];
     timings.facePassMs = [];
     glareInferenceMs = [];
@@ -200,20 +204,11 @@ async function processPhoto({ requestId, file, previewLongSide, highResPassEnabl
         imageRightEyeXY: face.imageRightEyeXY,
         faceBoxXYWH: face.faceBoxXYWH,
         detectionScore: face.detectionScore,
-        hasGlare: pass.hasGlare,
-        showLostDetailNote: pass.showLostDetailNote,
-        glareFraction: pass.glareFraction,
-        lostDetailFraction: pass.lostDetailFraction,
-        cropSizeMultiplier: pass.cropSizeMultiplier,
-        photoToEyeCropAffine: pass.photoToEyeCropAffine,
-        region: pass.region,
-        regionOriginalRgba: pass.regionOriginalRgba,
-        regionDeltaLayers: pass.regionDeltaLayers,
-        regionGlareMask: pass.regionGlareMask,
-        regionLostDetailMask: pass.regionLostDetailMask,
+        ...pass,
       });
+      regionOriginalRgbaByFace.push(pass.hasGlare ? readPhotoRegion(pass.region) : null);
       if (pass.hasGlare) {
-        transfer.push(pass.regionOriginalRgba.buffer, ...pass.regionDeltaLayers.map((layer) => layer.buffer), pass.regionGlareMask.buffer, pass.regionLostDetailMask.buffer);
+        transfer.push(regionOriginalRgbaByFace[faceIndex].buffer, ...pass.cropDeltaLayers.map((layer) => layer.buffer), pass.cropGlareMask.buffer);
       }
     }
     started = performance.now();
@@ -221,24 +216,39 @@ async function processPhoto({ requestId, file, previewLongSide, highResPassEnabl
     timings.previewMs = performance.now() - started;
     timings.glareInferenceOnlyMs = glareInferenceMs;
     transfer.push(previewBitmap);
-    post({ type: "result", requestId, photoWidth, photoHeight, faces, previewBitmap, timings, backend: activeBackend }, transfer);
+    post({ type: "result", requestId, photoWidth, photoHeight, faces, regionOriginalRgbaByFace, previewBitmap, timings, backend: activeBackend }, transfer);
+  } finally {
+    photoBitmap.close();
+  }
+}
+
+/** Original RGBA bytes of photo rects, from a fresh decode (the page keeps no full-size pixels). */
+async function readRegions({ requestId, file, regions }) {
+  const photoBitmap = await decodePhoto(file);
+  try {
+    const readPhotoRegion = createPhotoRegionReader(photoBitmap);
+    const regionsRgba = regions.map((region) => readPhotoRegion(region)); // each read is a fresh buffer, safe to transfer
+    post({ type: "regions", requestId, regionsRgba }, regionsRgba.map((rgba) => rgba.buffer));
   } finally {
     photoBitmap.close();
   }
 }
 
 /**
- * Full-resolution export: decode the original again, paste the patched regions, encode.
- * `patches`: [{ region, patchedRgba }]. Encoding drops every metadata block (EXIF, GPS, ICC).
+ * Full-resolution export: decode the original again, re-read each face region, warp and blend
+ * its crop-space delta at `strength`, paste, encode. `faces`: crop-space face results that are
+ * switched on. Encoding drops every metadata block (EXIF, GPS, ICC).
  */
-async function exportPhoto({ requestId, file, patches, mimeType, quality }) {
+async function exportPhoto({ requestId, file, faces, strength, mimeType, quality }) {
   const photoBitmap = await decodePhoto(file);
   try {
+    const readPhotoRegion = createPhotoRegionReader(photoBitmap);
     const canvas = new OffscreenCanvas(photoBitmap.width, photoBitmap.height);
     const context = canvas.getContext("2d");
     context.drawImage(photoBitmap, 0, 0);
-    for (const { region, patchedRgba } of patches) {
-      context.putImageData(new ImageData(patchedRgba, region.width, region.height), region.x, region.y);
+    for (const face of faces) {
+      const patchedRgba = buildFullResolutionFacePatch(face, readPhotoRegion(face.region), strength);
+      context.putImageData(new ImageData(patchedRgba, face.region.width, face.region.height), face.region.x, face.region.y);
     }
     const blob = await canvas.convertToBlob({ type: mimeType, quality });
     canvas.width = 0;
@@ -254,6 +264,7 @@ self.onmessage = async (event) => {
   try {
     if (message.type === "init") return await initialize(message);
     if (message.type === "process-photo") return await processPhoto(message);
+    if (message.type === "read-regions") return await readRegions(message);
     if (message.type === "export-photo") return await exportPhoto(message);
   } catch (error) {
     if (message.type === "init") return post({ type: "init-failed", message: error.message });

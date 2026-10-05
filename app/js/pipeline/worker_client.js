@@ -92,9 +92,18 @@ export class GlareWorkerClient {
     return this.request({ type: "process-photo", file, previewLongSide, highResPassEnabled }, { onStage });
   }
 
-  /** Encode the full-resolution result. `patches`: [{ region, patchedRgba }] (copied, not transferred). */
-  exportPhoto(file, patches, mimeType, quality) {
-    return this.request({ type: "export-photo", file, patches, mimeType, quality });
+  /** Original RGBA bytes of photo rects (fresh decode). Resolves to an array, one per rect. */
+  async readRegions(file, regions) {
+    const { regionsRgba } = await this.request({ type: "read-regions", file, regions });
+    return regionsRgba;
+  }
+
+  /**
+   * Encode the full-resolution result. `faces`: the crop-space face results to apply (copied,
+   * not transferred); the worker warps and blends them at `strength` against a fresh decode.
+   */
+  exportPhoto(file, faces, strength, mimeType, quality) {
+    return this.request({ type: "export-photo", file, faces, strength, mimeType, quality });
   }
 
   rejectAll(error) {

@@ -1,5 +1,5 @@
 {
- "version": "0fb1dba3d1845ee7",
+ "version": "0e0057c915132bac",
  "assets": [
   {
    "path": "404.html",
@@ -62,23 +62,38 @@
    "precache": true
   },
   {
+   "path": "js/blend/face_region_patch.js",
+   "bytes": 1552,
+   "precache": true
+  },
+  {
+   "path": "js/debug_hook.js",
+   "bytes": 3059,
+   "precache": true
+  },
+  {
    "path": "js/eye_crop_geometry.js",
    "bytes": 4198,
    "precache": true
   },
   {
    "path": "js/main.js",
-   "bytes": 13080,
+   "bytes": 12701,
    "precache": true
   },
   {
    "path": "js/photo/photo_compose.js",
-   "bytes": 2015,
+   "bytes": 2206,
    "precache": true
   },
   {
    "path": "js/photo/photo_file_types.js",
    "bytes": 2630,
+   "precache": true
+  },
+  {
+   "path": "js/photo/visible_photo_regions.js",
+   "bytes": 3338,
    "precache": true
   },
   {
@@ -98,22 +113,22 @@
   },
   {
    "path": "js/pipeline/glare_crop_pass.js",
-   "bytes": 6970,
+   "bytes": 7343,
    "precache": true
   },
   {
    "path": "js/pipeline/glare_worker.js",
-   "bytes": 11997,
+   "bytes": 12772,
    "precache": true
   },
   {
    "path": "js/pipeline/runtime_choice.js",
-   "bytes": 2549,
+   "bytes": 3197,
    "precache": true
   },
   {
    "path": "js/pipeline/worker_client.js",
-   "bytes": 4534,
+   "bytes": 4894,
    "precache": true
   },
   {
@@ -138,7 +153,7 @@
   },
   {
    "path": "js/ui/result_card.js",
-   "bytes": 10199,
+   "bytes": 10974,
    "precache": true
   },
   {

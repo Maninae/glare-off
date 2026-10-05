@@ -5,6 +5,8 @@
  *
  * States (data-state on the <li>): queued -> working -> done | no-face | no-glare | error.
  * The card never touches the worker; it calls `onDownload(card)` and main.js does the rest.
+ * Full-resolution face regions come from `loadRegions(card)` (main.js: the one-photo cache in
+ * photo/visible_photo_regions.js), so a card holds no region-size pixels of its own.
  */
 
 import { CompareView } from "./compare_view.js";
@@ -14,11 +16,13 @@ const WHOLE_PHOTO_VIEW = "whole";
 const WAITING_THUMBNAIL_LONG_SIDE = 960;
 
 export class ResultCard {
-  constructor(template, { fileName, cardIndex, onDownload }) {
+  constructor(template, { fileName, cardIndex, onDownload, loadRegions }) {
     this.element = template.content.firstElementChild.cloneNode(true);
     this.cardIndex = cardIndex;
     this.fileName = fileName;
     this.onDownload = onDownload;
+    this.loadRegions = loadRegions;
+    this.redrawTicket = 0; // a slower region read must not paint over a newer redraw
     this.compareView = new CompareView(this.element.querySelector(".compare"));
     this.downloadButton = this.element.querySelector(".result-download");
     this.controlsElement = this.element.querySelector(".result-controls");
@@ -194,14 +198,24 @@ export class ResultCard {
     });
   }
 
-  /** Current patches at the current strength and toggles (also what the download uses). */
-  currentPatches() {
-    return buildFacePatches(this.result.faces, this.enabledByFace, this.strength);
+  /** Crop-space faces that are switched on, and the strength: what the download applies. */
+  currentExportSettings() {
+    return { faces: this.result.faces.filter((face, faceIndex) => face.hasGlare && this.enabledByFace[faceIndex]), strength: this.strength };
   }
 
-  redraw() {
-    const patches = this.currentPatches();
+  async redraw() {
+    this.redrawTicket += 1;
+    const ticket = this.redrawTicket;
+    let entriesByFace;
+    try {
+      entriesByFace = await this.loadRegions(this);
+    } catch (error) {
+      this.showMessage(`Could not redraw this photo (${error.message}).`);
+      return;
+    }
+    if (ticket !== this.redrawTicket) return;
     const { previewBitmap, photoWidth, faces } = this.result;
+    const patches = buildFacePatches(faces, entriesByFace, this.enabledByFace, this.strength);
     if (this.currentView === WHOLE_PHOTO_VIEW) {
       const afterCanvas = composeAfterPreview(this.afterPreviewCanvas, previewBitmap, photoWidth, patches);
       this.compareView.showPair(previewBitmap, afterCanvas, previewBitmap.width, previewBitmap.height);
@@ -210,7 +224,7 @@ export class ResultCard {
     const faceIndex = Number(this.currentView);
     const face = faces[faceIndex];
     const patch = patches.find((candidate) => candidate.faceIndex === faceIndex);
-    const beforeCanvas = buildRegionCanvas(face.regionOriginalRgba, face.region.width, face.region.height);
+    const beforeCanvas = buildRegionCanvas(entriesByFace[faceIndex].regionOriginalRgba, face.region.width, face.region.height);
     const afterCanvas = patch ? buildRegionCanvas(patch.patchedRgba, face.region.width, face.region.height) : beforeCanvas;
     this.compareView.showPair(beforeCanvas, afterCanvas, face.region.width, face.region.height);
   }

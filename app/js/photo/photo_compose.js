@@ -1,7 +1,8 @@
 /**
- * Turn a processed photo (worker "result" message) into things to show and save:
- * - `buildFacePatches(faces, enabledByFace, strength)`: full-resolution patched regions, the
- *   exact bytes the download pastes over the original.
+ * Turn a processed photo (worker "result" message) into things to show:
+ * - `buildFacePatches(faces, entriesByFace, enabledByFace, strength)`: full-resolution patched
+ *   regions from the visible photo's region cache (photo/visible_photo_regions.js). The download
+ *   builds the same bytes in the worker (blend/face_region_patch.js).
  * - `composeAfterPreview(...)`: the preview with those patches drawn in at preview scale.
  * - `buildRegionCanvas(...)`: a full-resolution region as a canvas, for the eye zoom view.
  */
@@ -9,11 +10,12 @@
 import { blendFacePatch } from "../blend/face_patch_blend.js";
 
 /** [{ faceIndex, region, patchedRgba }] for faces that have glare and are switched on. */
-export function buildFacePatches(faces, enabledByFace, strength) {
+export function buildFacePatches(faces, entriesByFace, enabledByFace, strength) {
   const patches = [];
   faces.forEach((face, faceIndex) => {
     if (!face.hasGlare || !enabledByFace[faceIndex]) return;
-    patches.push({ faceIndex, region: face.region, patchedRgba: blendFacePatch(face.regionOriginalRgba, face.regionDeltaLayers, strength) });
+    const { regionOriginalRgba, regionDeltaLayers } = entriesByFace[faceIndex];
+    patches.push({ faceIndex, region: face.region, patchedRgba: blendFacePatch(regionOriginalRgba, regionDeltaLayers, strength) });
   });
   return patches;
 }

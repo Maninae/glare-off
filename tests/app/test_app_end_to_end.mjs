@@ -9,15 +9,20 @@
  *   3. Downloads are produced at the original resolution; EXIF orientation is baked in.
  *   4. Bit-exactness (PNG in, PNG out): every pixel outside the warped glare mask is byte-identical
  *      to the input; with every face switched off, the whole download is byte-identical.
+ *   4b. Memory: after all photos are processed, no face result holds a region-size array, only
+ *      one photo holds full-resolution regions, and that moves when another card is touched.
+ *      JS heap (after a forced GC) goes to summary.json.
  *   5. Second visit (service worker in control): cross-origin isolated, multi-threaded.
  *   6. Offline (context offline, reload): still loads and processes a photo.
  *   7. WebGPU, when headless Chromium exposes an adapter.
+ *   7b. Without `?debug` the page exposes no test hook.
  *   8. Screenshots at desktop and phone sizes, light and dark, to SCREENSHOT_DIRECTORY; no
  *      horizontal overflow on the phone.
  * Timings for every photo and backend go to SCREENSHOT_DIRECTORY/summary.json.
  *
  * Needs the private photos from `python -m tests.app.make_browser_test_photos` (vega) and
  * Playwright in the node tools directory (see app/CLAUDE.md, "Tests").
+ * Every page load passes `debug` so the app installs window.__glareOffDebug.
  * Run: node tests/app/test_app_end_to_end.mjs
  */
 
@@ -130,12 +135,14 @@ async function checkBitExactness(page, jobIndex, originalPath, downloadedPath) {
       const downloaded = await decode(downloadedBase64);
       if (original.width !== downloaded.width || original.height !== downloaded.height) return { sizeMismatch: true };
       const insideMask = new Uint8Array(original.width * original.height);
-      for (const face of window.__glareOffDebug.getJobFaces(jobIndex)) {
+      const faces = window.__glareOffDebug.describe().jobs[jobIndex].faces;
+      for (const [faceIndex, face] of faces.entries()) {
         if (!face.hasGlare) continue;
+        const regionGlareMask = window.__glareOffDebug.warpGlareMaskToRegion(jobIndex, faceIndex);
         const { x, y, width, height } = face.region;
         for (let row = 0; row < height; row += 1) {
           for (let column = 0; column < width; column += 1) {
-            if (face.regionGlareMask[row * width + column] > 0) insideMask[(y + row) * original.width + x + column] = 1;
+            if (regionGlareMask[row * width + column] > 0) insideMask[(y + row) * original.width + x + column] = 1;
           }
         }
       }
@@ -175,7 +182,7 @@ page.on("pageerror", (error) => pageErrors.push(error.message));
 page.on("console", (message) => {
   if (message.type() === "error") pageErrors.push(message.text());
 });
-await page.goto(`${server.baseUrl}?backend=wasm`);
+await page.goto(`${server.baseUrl}?backend=wasm&debug`);
 const readyState = await waitForAppState(page, (state) => state.engineInfo);
 check("first visit: engine ready on the WASM build", readyState.engineInfo.backend === "wasm", JSON.stringify(readyState.engineInfo.timings));
 summary.backends.wasmFirstVisit = { ...readyState.engineInfo, crossOriginIsolated: readyState.crossOriginIsolated };
@@ -199,6 +206,20 @@ const rotatedJob = doneState.jobs[testPhotoPaths.findIndex((path) => path.endsWi
 check("EXIF orientation 6 applied on load (stored 540x720, shown 720x540)", rotatedJob.photoWidth === 720 && rotatedJob.photoHeight === 540);
 await page.waitForTimeout(900); // let the first result's sweep settle
 await screenshot(page.locator(".result").first(), "desktop-light-result-card");
+
+// 4b. Memory: face results are crop-space only; one photo at a time holds full-res regions.
+const cropPlaneSize = 512 * 256;
+const memoryAfterProcessing = await page.evaluate(() => window.__glareOffDebug.describeMemory());
+const oversizedArrays = memoryAfterProcessing.faces.flatMap((face) => face.typedArrays.filter((array) => array.length > cropPlaneSize || (face.regionPixels > cropPlaneSize && array.length >= face.regionPixels)).map((array) => `job ${face.jobIndex} face ${face.faceIndex} ${array.key} ${array.type}[${array.length}]`));
+const largestRegionPixels = Math.max(...memoryAfterProcessing.faces.map((face) => face.regionPixels));
+check("memory: no face result holds an array larger than one 512x256 crop plane", oversizedArrays.length === 0, oversizedArrays.join("; ") || `largest region ${largestRegionPixels} px, ${memoryAfterProcessing.faces.reduce((total, face) => total + face.typedArrays.length, 0)} crop-size arrays over ${memoryAfterProcessing.faces.length} faces`);
+check("memory: no job result keeps region pixels", memoryAfterProcessing.jobsHoldingRegionPixels.length === 0, memoryAfterProcessing.jobsHoldingRegionPixels.join(","));
+const lastDoneJobIndex = doneState.jobs.map((job) => job.state).lastIndexOf("done");
+check("memory: only the newest result holds full-res regions", memoryAfterProcessing.visibleRegionCacheJobIndex === lastDoneJobIndex, `job ${memoryAfterProcessing.visibleRegionCacheJobIndex}, ${(memoryAfterProcessing.visibleRegionCacheBytes / 1e6).toFixed(1)} MB`);
+const cdpSession = await firstContext.newCDPSession(page);
+await cdpSession.send("HeapProfiler.collectGarbage");
+summary.memory = { afterProcessing: memoryAfterProcessing, heapUsageAfterGc: await cdpSession.send("Runtime.getHeapUsage") };
+console.log(`INFO  heap after processing ${testPhotoPaths.length} photos and a forced GC: ${JSON.stringify(summary.memory.heapUsageAfterGc)}`);
 
 // Downloads (one per photo with glare), size checks, bit-exactness on PNGs.
 const downloadsByJob = {};
@@ -258,13 +279,16 @@ check("CSP-blocked requests never reached the network layer", cspLeak.length ===
 pageErrors.splice(0, pageErrors.length, ...pageErrors.filter((text) => !text.includes("Content Security Policy") && !text.includes("Failed to fetch")));
 check("no page errors on first visit", pageErrors.length === 0, pageErrors.join(" | "));
 
-// Eye zoom view.
+// Eye zoom view on the first card: it no longer holds the cache, so its regions are re-read.
 await page.locator(".result").first().locator(".view-option").nth(1).click();
+await page.waitForFunction(() => window.__glareOffDebug.describeMemory().visibleRegionCacheJobIndex === 0, null, { timeout: 30_000 });
 await page.waitForTimeout(200);
 await screenshot(page.locator(".result").first(), "desktop-light-eyes-zoom");
+const memoryAfterSwitch = await page.evaluate(() => window.__glareOffDebug.describeMemory());
+check("memory: touching another card moves the full-res cache to it", memoryAfterSwitch.visibleRegionCacheJobIndex === 0, `${(memoryAfterSwitch.visibleRegionCacheBytes / 1e6).toFixed(1)} MB`);
 
 // ---------- 5: second visit (service worker in control, cross-origin isolated) ----------
-await page.goto(`${server.baseUrl}?backend=wasm`);
+await page.goto(`${server.baseUrl}?backend=wasm&debug`);
 const secondState = await waitForAppState(page, (state) => state.engineInfo);
 summary.backends.wasmSecondVisit = { ...secondState.engineInfo, crossOriginIsolated: secondState.crossOriginIsolated };
 check("second visit: page is controlled by the service worker", secondState.serviceWorkerControlled);
@@ -281,7 +305,7 @@ check("second visit: processing made no network requests", secondVisitNetwork.le
 
 // ---------- 6: offline ----------
 await firstContext.setOffline(true);
-await page.goto(`${server.baseUrl}?backend=wasm`);
+await page.goto(`${server.baseUrl}?backend=wasm&debug`);
 const offlineState = await waitForAppState(page, (state) => state.engineInfo, { timeoutMs: 60_000 });
 check("offline: engine loads from the service worker cache", Boolean(offlineState.engineInfo));
 await page.setInputFiles("#file-input", [testPhotoPaths[0]]);
@@ -296,6 +320,10 @@ await firstContext.close();
 const shellContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const shellPage = await shellContext.newPage();
 await shellPage.goto(`${server.baseUrl}?nosw`);
+await shellPage.waitForFunction(() => document.getElementById("app-name")?.textContent.length > 0); // boot() ran
+const hookWithoutFlag = await shellPage.evaluate(() => typeof window.__glareOffDebug);
+check("without ?debug the page exposes no test hook", hookWithoutFlag === "undefined", hookWithoutFlag);
+await shellPage.goto(`${server.baseUrl}?nosw&debug`);
 const shellState = await waitForAppState(shellPage, (state) => state.engineInfo, { timeoutMs: 60_000 });
 const shellAdapter = await shellPage.evaluate(async () => {
   const adapter = await navigator.gpu?.requestAdapter();
@@ -306,7 +334,7 @@ await shellContext.close();
 
 const gpuBrowser = await chromium.launch({ channel: "chromium", args: ["--enable-unsafe-webgpu"] });
 const gpuPage = await (await gpuBrowser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
-await gpuPage.goto(`${server.baseUrl}?nosw`);
+await gpuPage.goto(`${server.baseUrl}?nosw&debug`);
 const gpuAutoState = await waitForAppState(gpuPage, (state) => state.engineInfo, { timeoutMs: 120_000 });
 summary.backends.webgpu = { ...gpuAutoState.engineInfo, note: "new headless mode, real Apple GPU (Metal)" };
 if (gpuAutoState.engineInfo.backend === "webgpu") {
@@ -330,7 +358,7 @@ for (const [label, contextOptions] of [
 ]) {
   const context = await browser.newContext({ ...contextOptions, acceptDownloads: true });
   const viewPage = await context.newPage();
-  await viewPage.goto(`${server.baseUrl}?backend=wasm&nosw&keepworker`);
+  await viewPage.goto(`${server.baseUrl}?backend=wasm&nosw&keepworker&debug`);
   await waitForAppState(viewPage, (state) => state.engineInfo);
   await screenshot(viewPage, `${label}-empty`);
   await viewPage.setInputFiles("#file-input", [testPhotoPaths[1], testPhotoPaths[2]]);

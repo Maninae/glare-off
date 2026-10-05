@@ -5,15 +5,18 @@
  * - The models load as soon as the page opens, so processing a photo makes no network request.
  * - On phones and small tablets the worker is terminated once the queue drains, which is the
  *   only way to give WASM memory back; the next photo restarts it from the offline cache.
- * - `window.__glareOffDebug` is the test hook (tests/app/test_app_end_to_end.mjs). It exposes
- *   state and timings; it never sends anything anywhere.
+ * - Only the visible photo keeps full-resolution face regions (visibleRegions); downloads
+ *   rebuild their patches in a worker from the crop-space face results.
+ * - With `?debug` in the URL, debug_hook.js installs the test hook `window.__glareOffDebug`.
  */
 
 import { APP_NAME, HIGH_RES_PASS_ENABLED, MODEL_PATHS, ONNX_RUNTIME_BUILDS, PREVIEW_LONG_SIDE } from "./app_config.js";
 import { GlareWorkerClient } from "./pipeline/worker_client.js";
 import { chooseRuntime, isMemoryConstrainedDevice } from "./pipeline/runtime_choice.js";
 import { buildDownloadFileName, chooseExportFormat, sniffImageFormat } from "./photo/photo_file_types.js";
+import { VisiblePhotoRegionCache } from "./photo/visible_photo_regions.js";
 import { buildStoredZip } from "./photo/zip_store.js";
+import { installDebugHookWhenRequested } from "./debug_hook.js";
 import { EngineStatusLine } from "./ui/engine_status.js";
 import { wireInputDoors } from "./ui/input_doors.js";
 import { ResultCard } from "./ui/result_card.js";
@@ -48,6 +51,7 @@ let engineReady = null; // Promise of the worker's "ready" message
 let engineInfo = null;
 let queueRunning = false;
 const pageTimings = { pageStart: performance.timeOrigin };
+const visibleRegions = new VisiblePhotoRegionCache({ readRegions: (file, regions) => withPixelWorker((client) => client.readRegions(file, regions)) });
 // The shell precache is ~0.2 MB, so control normally arrives well inside this.
 const SERVICE_WORKER_CONTROL_WAIT_MS = 5000;
 
@@ -112,7 +116,7 @@ function addPhotos(files) {
   elements.addMoreButton.hidden = false;
   elements.results.hidden = false;
   for (const file of files) {
-    const card = new ResultCard(elements.resultTemplate, { fileName: file.name || "Pasted photo", cardIndex: jobs.length, onDownload: downloadOne });
+    const card = new ResultCard(elements.resultTemplate, { fileName: file.name || "Pasted photo", cardIndex: jobs.length, onDownload: downloadOne, loadRegions: (resultCard) => visibleRegions.entriesFor(jobs[resultCard.jobIndex]) });
     const job = { file, inputFormat: null, card, state: "queued", result: null };
     card.jobIndex = jobs.length;
     jobs.push(job);
@@ -147,7 +151,9 @@ async function processJob(job) {
       highResPassEnabled: HIGH_RES_PASS_ENABLED || new URLSearchParams(location.search).has("hires"),
       onStage: (stageMessage) => job.card.showStage(stageMessage),
     });
-    job.result = result;
+    const { regionOriginalRgbaByFace, ...resultWithoutRegions } = result;
+    job.result = resultWithoutRegions;
+    visibleRegions.adopt(job, result.faces, regionOriginalRgbaByFace); // the newest result is the one on screen
     job.timings = { ...result.timings, totalMs: performance.now() - startedAt };
     job.state = result.faces.some((face) => face.hasGlare) ? "done" : result.faces.length === 0 ? "no-face" : "no-glare";
     job.card.showResult(result);
@@ -178,22 +184,22 @@ async function runQueue() {
   }
 }
 
-/** A worker for encoding downloads; it needs no models, so a sleeping engine stays asleep. */
-async function withExportWorker(task) {
+/** A worker for region reads and downloads; they need no models, so a sleeping engine stays asleep. */
+async function withPixelWorker(task) {
   if (workerClient?.worker) return task(workerClient);
-  const exportWorker = new GlareWorkerClient();
-  exportWorker.startWithoutModels();
+  const pixelWorker = new GlareWorkerClient();
+  pixelWorker.startWithoutModels();
   try {
-    return await task(exportWorker);
+    return await task(pixelWorker);
   } finally {
-    exportWorker.terminate();
+    pixelWorker.terminate();
   }
 }
 
 async function exportJob(job) {
   const { mimeType, quality, extension } = await chooseExportFormat(job.inputFormat);
-  const patches = job.card.currentPatches().map(({ region, patchedRgba }) => ({ region, patchedRgba }));
-  const exported = await withExportWorker((client) => client.exportPhoto(job.file, patches, mimeType, quality));
+  const { faces, strength } = job.card.currentExportSettings();
+  const exported = await withPixelWorker((client) => client.exportPhoto(job.file, faces, strength, mimeType, quality));
   return { blob: exported.blob, fileName: buildDownloadFileName(job.file.name || "photo", extension), width: exported.width, height: exported.height };
 }
 
@@ -264,42 +270,9 @@ async function registerServiceWorkerAndWaitForControl() {
   });
 }
 
-function exposeDebugHook() {
-  window.__glareOffDebug = {
-    describe: () => ({
-      engineInfo,
-      runtime,
-      crossOriginIsolated: self.crossOriginIsolated,
-      serviceWorkerControlled: Boolean(navigator.serviceWorker?.controller),
-      jobs: jobs.map((job) => ({
-        fileName: job.file.name,
-        inputFormat: job.inputFormat,
-        state: job.state,
-        timings: job.timings,
-        lastExport: job.lastExport,
-        photoWidth: job.result?.photoWidth,
-        photoHeight: job.result?.photoHeight,
-        faces: job.result?.faces.map((face) => ({
-          imageLeftEyeXY: face.imageLeftEyeXY,
-          imageRightEyeXY: face.imageRightEyeXY,
-          detectionScore: face.detectionScore,
-          hasGlare: face.hasGlare,
-          showLostDetailNote: face.showLostDetailNote,
-          glareFraction: face.glareFraction,
-          region: face.region,
-        })),
-      })),
-      pageTimings,
-    }),
-    /** Full face data (masks included) for the bit-exactness check. Test use only. */
-    getJobFaces: (jobIndex) => jobs[jobIndex]?.result?.faces,
-    exportJob: (jobIndex) => exportJob(jobs[jobIndex]),
-  };
-}
-
 async function boot() {
   document.getElementById("app-name").textContent = APP_NAME;
-  exposeDebugHook();
+  installDebugHookWhenRequested({ jobs, visibleRegions, exportJob, getEngineInfo: () => engineInfo, getRuntime: () => runtime, pageTimings });
   wireInputDoors(
     {
       fileInput: elements.fileInput,
