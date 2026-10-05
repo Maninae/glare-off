@@ -48,11 +48,10 @@ from glare_model.training.optimization import (
     select_training_device,
 )
 from glare_model.training.run_directory import prepare_run_directory
+from glare_model.training.validation_metrics import compute_checkpoint_selection_score
 from glare_model.training.validation_pass import move_batch_to_device, run_validation_pass
 
 logger = logging.getLogger(__name__)
-
-BEST_METRIC_NAME = "psnr_lens"
 
 
 class GlareModelTrainer:
@@ -160,7 +159,11 @@ class GlareModelTrainer:
                 micro_batches = []
 
     def validate_and_log(self) -> dict[str, float]:
-        """Validate the EMA model, log scalars and the image grid, keep the best EMA checkpoint."""
+        """Validate the EMA model, log scalars and the image grid, keep the best EMA checkpoint.
+
+        Best = highest `psnr_lens` among checkpoints passing the clean-sample change gate
+        (`compute_checkpoint_selection_score`).
+        """
         train_config = self.training_config.TRAIN
         metrics, image_grid = run_validation_pass(
             self.ema.averaged_model, self.validation_loader, self.device, train_config.IMAGE_GRID_COUNT, train_config.MAX_VAL_BATCHES
@@ -170,8 +173,10 @@ class GlareModelTrainer:
         if image_grid is not None:
             self.summary_writer.add_image("val/input_pred_target_maskpred_masktarget_lostpred", image_grid, self.step)
         logger.info("step %d val %s", self.step, " ".join(f"{name}={value:.4f}" for name, value in metrics.items()))
-        if metrics[BEST_METRIC_NAME] > self.best_metric_value:
-            self.best_metric_value = metrics[BEST_METRIC_NAME]
+        selection_score = compute_checkpoint_selection_score(metrics, train_config.BEST_MAX_CLEAN_SAMPLE_CHANGE)
+        self.summary_writer.add_scalar("val/clean_change_gate_passed", float(math.isfinite(selection_score)), self.step)
+        if selection_score > self.best_metric_value:
+            self.best_metric_value = selection_score
             save_checkpoint_atomically(self.build_checkpoint_state(), self.run_directory.checkpoint_directory / BEST_CHECKPOINT_NAME)
         return metrics
 

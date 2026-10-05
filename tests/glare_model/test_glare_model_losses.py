@@ -72,3 +72,40 @@ def test_ssim_of_identical_images_is_one():
 
 def test_masked_mean_of_empty_mask_is_zero_not_nan():
     assert float(masked_mean(torch.ones(1, 3, 4, 4), torch.zeros(1, 1, 4, 4))) == 0.0
+
+
+def test_removing_glare_that_spills_outside_the_lens_is_not_penalized():
+    """Bloom just past the lens rim is real glare: removing it exactly must cost no outside-lens penalty."""
+    batch = make_batch_with_glare_in_lens()
+    spill = torch.zeros_like(batch["glare_mask"])
+    spill[..., 4:8, 20:40] = 1.0  # rows 4-7 are outside the lens (lens rows 8-23)
+    assert float((spill * batch["lens_mask"]).sum()) == 0.0
+    batch["glare_mask"] = torch.maximum(batch["glare_mask"], spill)
+    batch["glare_eye_crop"] = batch["clean_eye_crop"] + 0.4 * batch["glare_mask"]
+    exact_removal = batch["clean_eye_crop"] - batch["glare_eye_crop"]
+    loss_outputs = GlareRemovalLoss(GlareRemovalLossWeights())(exact_removal, perfect_logits(batch), batch)
+    assert float(loss_outputs["loss_outside_lens_change"]) == 0.0
+    assert float(loss_outputs["loss_total"]) == pytest.approx(0.0, abs=1e-5)
+
+
+def test_glare_free_sample_is_penalized_for_any_change_inside_or_outside_the_lens():
+    batch = make_batch_with_glare_in_lens()
+    for key in ("glare_mask", "lost_detail_mask"):
+        batch[key] = torch.zeros_like(batch[key])
+    batch["glare_eye_crop"] = batch["clean_eye_crop"].clone()
+    mask_fires_everywhere = torch.full((2, 2, 32, 64), PERFECT_LOGIT_MAGNITUDE)
+    loss_function = GlareRemovalLoss(GlareRemovalLossWeights())
+
+    change_outside = torch.zeros_like(batch["glare_eye_crop"])
+    change_outside[..., 0:4, 0:4] = 0.1
+    outside_outputs = loss_function(change_outside, mask_fires_everywhere, batch)
+    assert float(outside_outputs["loss_outside_lens_change"]) > 0.0
+
+    change_inside = torch.zeros_like(batch["glare_eye_crop"])
+    change_inside[..., 10:20, 10:30] = 0.1  # inside the lens
+    inside_outputs = loss_function(change_inside, mask_fires_everywhere, batch)
+    assert float(inside_outputs["loss_lens_l1"]) > 0.0
+    assert float(inside_outputs["loss_unblended_lens_l1"]) > 0.0
+    # The raw delta is penalized inside the lens even when the predicted mask hides it from the blend.
+    mask_silent = -mask_fires_everywhere
+    assert float(loss_function(change_inside, mask_silent, batch)["loss_unblended_lens_l1"]) > 0.0

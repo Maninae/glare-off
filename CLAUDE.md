@@ -34,6 +34,12 @@ Heavy assets never enter the repo. Datasets: `/Volumes/vega/datasets/glare-off/`
 - Defined in `eye_crop/eye_crop_geometry.py`; `app/js/eye_crop_geometry.js` is a line-for-line port.
 - 512 wide x 256 high, eyes level, eye midpoint at the crop center, eye distance = 0.36 of crop width.
 - Eye centers come from YuNet in both Python and the browser. Training crops jitter the eye centers to cover detector noise.
+- **Crop resampling** (`extract_eye_crop_with_area_prefilter`; training uses it, the app must mirror it exactly):
+  - `s = hypot(A[0][0], A[0][1])` for the photo->crop affine `A` (crop px per photo px).
+  - `s >= 0.5`: one bilinear warp of the photo with `A`, BORDER_REFLECT_101. Never cubic, also for upscales.
+  - `s < 0.5`: `n = floor(1/s + 1e-9)` (an integer >= 2, so `s*n` is in [0.5, 1]). Shrink the photo with INTER_AREA at `fx = fy = 1/n` (OpenCV's `cv2.resize(photo, None, fx=1/n, fy=1/n, INTER_AREA)`: n x n box averages, blocks aligned to the photo origin, output size `round(W/n) x round(H/n)`). Then bilinear warp, BORDER_REFLECT_101, with `A' = A @ [[n, 0, (n-1)/2], [0, n, (n-1)/2], [0, 0, 1]]`.
+  - In the app's region-based warp, the region read from the photo must start at multiples of `n` so the blocks match the whole-photo grid. Rounding the shrunk pixels to uint8 before the warp is fine (training's phone path does the same).
+  - Warping layers back to the photo still uses the ORIGINAL `A` (unchanged).
 
 ### Source manifest (`training_sources/` -> everyone)
 - One JSONL row per source face at `/Volumes/vega/datasets/glare-off/sources/source_manifest.jsonl`.

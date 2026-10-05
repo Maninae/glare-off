@@ -7,7 +7,12 @@ crop from the same two eye centers, or the model is run on framing it never trai
 - The crop is EYE_CROP_WIDTH x EYE_CROP_HEIGHT, eyes level, eye midpoint at the crop center.
 - The distance between the eye centers spans EYE_DISTANCE_FRACTION of the crop width.
 - Pure numpy/OpenCV, no detector here: callers pass eye centers (see `yunet_eye_detector.py`).
+- `extract_eye_crop_with_area_prefilter` is the crop resampling every pixel producer should use
+  (training and the app): bilinear, with an integer INTER_AREA pre-shrink when the crop would
+  shrink the photo below `AREA_PREFILTER_SCALE_THRESHOLD` (bilinear alone aliases there).
 """
+
+import math
 
 import cv2
 import numpy as np
@@ -16,6 +21,8 @@ EYE_CROP_WIDTH = 512
 EYE_CROP_HEIGHT = 256
 # Eye-to-eye distance as a fraction of crop width; 0.36 leaves room for wide frames and temples.
 EYE_DISTANCE_FRACTION = 0.36
+# Below this crop scale a plain bilinear warp skips photo pixels and aliases; pre-shrink first.
+AREA_PREFILTER_SCALE_THRESHOLD = 0.5
 
 
 def compute_photo_to_eye_crop_affine(
@@ -59,8 +66,9 @@ def extract_eye_crop(
 ) -> np.ndarray:
     """Warp the photo into the aligned eye crop (reflect-padded where the crop leaves the photo).
 
-    - Use INTER_AREA when the crop shrinks the photo (the usual case for phone photos) and
-      INTER_CUBIC when it enlarges; callers that care pick via `eye_crop_scale`.
+    - warpAffine has no area filter: INTER_AREA here behaves as bilinear, with no prefilter. For
+      image pixels the model sees, use `extract_eye_crop_with_area_prefilter` (what the app does).
+      This plain warp stays for label maps (INTER_NEAREST) and the app parity fixtures.
     """
     return cv2.warpAffine(
         photo,
@@ -74,6 +82,61 @@ def extract_eye_crop(
 def eye_crop_scale(photo_to_eye_crop_affine: np.ndarray) -> float:
     """Return crop pixels per photo pixel (below 1 means the crop is a downscale of the photo)."""
     return float(np.hypot(photo_to_eye_crop_affine[0, 0], photo_to_eye_crop_affine[0, 1]))
+
+
+def compute_area_prefilter_factor(crop_scale: float) -> int:
+    """Return the integer INTER_AREA shrink factor applied before the warp (1 = no pre-shrink).
+
+    For crop_scale < AREA_PREFILTER_SCALE_THRESHOLD the factor is floor(1 / crop_scale), so the
+    remaining warp scale `crop_scale * factor` lands in (1 - crop_scale, 1], always inside [0.5, 1].
+    """
+    if crop_scale >= AREA_PREFILTER_SCALE_THRESHOLD:
+        return 1
+    # The epsilon keeps 1/0.25 = 3.9999... from flooring to 3.
+    return max(2, math.floor(1.0 / crop_scale + 1e-9))
+
+
+def compose_affine_with_area_prefilter(photo_to_eye_crop_affine: np.ndarray, prefilter_factor: int) -> np.ndarray:
+    """Return the affine from the pre-shrunk photo's pixels to the same crop pixels.
+
+    `cv2.resize(fx=1/n)` maps pixel centers as `x_small = (x + 0.5) / n - 0.5`, so a
+    pre-shrunk pixel sits at photo `x = n * x_small + (n - 1) / 2`.
+    """
+    factor = float(prefilter_factor)
+    small_to_photo = np.array([[factor, 0.0, (factor - 1.0) / 2.0], [0.0, factor, (factor - 1.0) / 2.0], [0.0, 0.0, 1.0]])
+    return photo_to_eye_crop_affine @ small_to_photo
+
+
+def extract_eye_crop_with_area_prefilter(
+    photo: np.ndarray,
+    photo_to_eye_crop_affine: np.ndarray,
+    crop_width: int = EYE_CROP_WIDTH,
+    crop_height: int = EYE_CROP_HEIGHT,
+) -> np.ndarray:
+    """Warp the photo into the eye crop the way the app does: optional integer area pre-shrink, then bilinear.
+
+    Args:
+        photo: (H, W) or (H, W, C) image; float or uint8.
+        photo_to_eye_crop_affine: from `compute_photo_to_eye_crop_affine` (unchanged by the pre-shrink).
+    Returns:
+        (crop_height, crop_width[, C]) crop in the same crop coordinates as `extract_eye_crop`, so
+        `warp_eye_crop_layer_back_to_photo` with the ORIGINAL affine still round-trips.
+
+    - Scale >= 0.5: one bilinear warpAffine (upscales too: never cubic, the app is bilinear).
+    - Scale < 0.5: `cv2.resize(photo, fx=fy=1/n, INTER_AREA)` with n from `compute_area_prefilter_factor`
+      (n x n box average, blocks aligned to the photo origin), then bilinear with the composed affine.
+    """
+    prefilter_factor = compute_area_prefilter_factor(eye_crop_scale(photo_to_eye_crop_affine))
+    if prefilter_factor > 1:
+        photo = cv2.resize(photo, None, fx=1.0 / prefilter_factor, fy=1.0 / prefilter_factor, interpolation=cv2.INTER_AREA)
+        photo_to_eye_crop_affine = compose_affine_with_area_prefilter(photo_to_eye_crop_affine, prefilter_factor)
+    return cv2.warpAffine(
+        photo,
+        photo_to_eye_crop_affine,
+        (crop_width, crop_height),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT_101,
+    )
 
 
 def warp_eye_crop_layer_back_to_photo(

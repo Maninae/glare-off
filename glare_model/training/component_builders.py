@@ -18,6 +18,7 @@ import glare_model.data.real_module_adapters  # noqa: F401  (registers the real-
 from glare_model.architecture.glare_removal_nafnet import GlareRemovalNAFNet, count_trainable_parameters
 from glare_model.data.crop_augmentation import EyeCenterJitterSettings, PhotometricJitterSettings
 from glare_model.data.glare_pair_dataset import GlarePairDataset, GlarePairDatasetSettings
+from glare_model.data.phone_capture_simulation import PhoneCaptureSimulationSettings
 from glare_model.losses.glare_removal_loss import GlareRemovalLoss, GlareRemovalLossWeights
 from glare_model.registry import (
     GLARE_SYNTHESIZER_REGISTRY,
@@ -56,7 +57,11 @@ def build_glare_removal_loss(loss_config: DictConfig) -> GlareRemovalLoss:
 
 
 def build_glare_pair_dataset(training_config: DictConfig, split: str) -> GlarePairDataset:
-    """Build the train or val dataset; val uses a fixed seed and no photometric augmentation."""
+    """Build the train or val dataset; val uses a fixed seed and no photometric augmentation.
+
+    Phone-capture simulation (`DATA.PHONE_CAPTURE`) applies to both splits; val's draws are seeded,
+    so its share of phone-scale samples is fixed across evaluations.
+    """
     data_config = training_config.DATA
     is_validation = split == VALIDATION_SPLIT
     source_face_provider = build_from_config_section(
@@ -76,6 +81,7 @@ def build_glare_pair_dataset(training_config: DictConfig, split: str) -> GlarePa
         dataset_settings,
         EyeCenterJitterSettings(**lowercase_section_kwargs(data_config.EYE_JITTER)),
         PhotometricJitterSettings(**lowercase_section_kwargs(data_config.PHOTOMETRIC)),
+        PhoneCaptureSimulationSettings(**lowercase_section_kwargs(data_config.PHONE_CAPTURE)),
     )
 
 

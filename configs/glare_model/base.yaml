@@ -30,6 +30,13 @@ DATA:
     SATURATION: 0.2
     WHITE_BALANCE: 0.06
     HORIZONTAL_FLIP_PROBABILITY: 0.5
+  PHONE_CAPTURE:             # shrink the source photo to a phone-like crop scale (train AND val, seeded for val)
+    PROBABILITY: 0.5         # share of samples; the rest keep the manifest's native scale (~0.6-1.2)
+    CROP_SCALE_RANGE: [0.15, 0.6]   # crop px per photo px; real phone photos land at ~0.15-0.4
+    JPEG_PROBABILITY: 0.5    # of the simulated samples, applied before glare synthesis
+    JPEG_QUALITY_RANGE: [70, 95]
+    NOISE_PROBABILITY: 0.5
+    NOISE_SIGMA_RANGE: [0.002, 0.012]   # Gaussian sensor noise, sRGB [0, 1] units (~0.5-3 levels)
 
 DATALOADER:
   BATCH_SIZE: 2              # micro-batch; 2 at 512x256 peaks ~2.2 GiB MPS (batch 4 OOMs under the 2.37 GiB cap)
@@ -72,3 +79,4 @@ TRAIN:
   CHECKPOINT_PERIOD: 1000
   IMAGE_GRID_COUNT: 4
   MAX_VAL_BATCHES: 0         # 0 = whole val set
+  BEST_MAX_CLEAN_SAMPLE_CHANGE: 0.00196   # 0.5/255: best_ema.pt must leave glare-free val crops this close to the input (mean |change|)

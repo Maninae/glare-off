@@ -16,8 +16,13 @@ Terms (weights in `LOSS.WEIGHTS`, zero disables a term):
   leftover low-frequency veil).
 - MASK_FOCAL / MASK_DICE: focal BCE (alpha 0.25, gamma 2, soft targets) and soft Dice on both
   mask channels.
-- OUTSIDE_LENS_CHANGE: mean |delta| outside the lens. Pixels outside the lens must not change at
-  all; the target there may differ from the input (JPEG, noise), so this compares to the INPUT.
+- OUTSIDE_LENS_CHANGE: mean |delta| outside the lens AND outside the ground-truth glare mask,
+  weight `(1 - lens_mask) * (1 - glare_mask)`. Compares to the INPUT (the target may differ from
+  it by JPEG/noise). Real glare spills past the lens edge (bloom, rim glints: ~1.7% of glare mass);
+  there GLARE_L1 asks for removal, so this term must not fight it.
+- Glare-free samples (empty glare mask) are still guarded everywhere: OUTSIDE_LENS_CHANGE covers
+  the whole outside, and inside the lens LENS_L1 (blended) and UNBLENDED_LENS_L1 (raw delta)
+  compare against a target that equals the input, so any change there is penalized.
 - PERCEPTUAL_VGG: disabled hook; a VGG/LPIPS loss is a licensing gray area (docs/research/03).
 """
 
@@ -134,7 +139,7 @@ class GlareRemovalLoss:
             "fft": fft_amplitude_l1(blended_crop, clean_eye_crop),
             "mask_focal": soft_target_focal_loss(mask_logits, mask_targets),
             "mask_dice": soft_dice_loss(mask_probabilities, mask_targets),
-            "outside_lens_change": masked_mean(restoration_delta.abs(), 1 - lens_mask),
+            "outside_lens_change": masked_mean(restoration_delta.abs(), (1 - lens_mask) * (1 - glare_mask)),
         }
         weighted_total = sum(getattr(self.loss_weights, name) * value for name, value in loss_terms.items())
         loss_outputs = {f"loss_{name}": value for name, value in loss_terms.items()}

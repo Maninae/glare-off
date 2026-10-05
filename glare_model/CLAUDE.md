@@ -17,6 +17,7 @@ glare_model/
 ├── data/
 │   ├── source_face.py                the two injected interfaces: SourceFaceProvider, GlareSynthesizer; contract validator
 │   ├── crop_augmentation.py          eye-center jitter, photometric jitter, flip (swaps lens labels 1<->2)
+│   ├── phone_capture_simulation.py   re-sample the crop region to a phone-like crop scale (0.15-0.6), noise + JPEG
 │   ├── glare_pair_dataset.py         GlarePairDataset: source face -> jittered crop -> synth -> CHW tensors
 │   ├── fake_data_sources.py          FAKE provider + FAKE blob synthesizer (tests, smoke runs)
 │   └── real_module_adapters.py       the ONLY file that reaches training_sources/ and glare_synthesis/
@@ -29,7 +30,7 @@ glare_model/
 │   ├── optimization.py               AdamW, warmup-cosine, EMA, device, seeding, MPS memory cap
 │   ├── checkpointing.py              atomic save, load, RNG state
 │   ├── component_builders.py         config -> model, datasets, loaders, loss
-│   ├── validation_metrics.py         PSNR/SSIM (all, in-lens), input-PSNR baseline, mask IoU
+│   ├── validation_metrics.py         PSNR/SSIM (all, in-lens), input-PSNR baseline, mask IoU, change guards, best-checkpoint score
 │   ├── validation_pass.py            val loop + TensorBoard grid
 │   └── glare_model_trainer.py        GlareModelTrainer: the coordinator owning all state
 └── export/
@@ -40,7 +41,7 @@ glare_model/
     └── export_and_verify.py          shared export + verify + report
 ```
 
-Configs: `configs/glare_model/base.yaml` (everything), `model/{small,base,large}.yaml`, `data/{fake,real}.yaml`, `smoke_fake.yaml`. Tests: `tests/glare_model/` (CPU only, ~7 s).
+Configs: `configs/glare_model/base.yaml` (everything), `model/{small,base,large}.yaml`, `data/{fake,real}.yaml`, `smoke_fake.yaml`. Tests: `tests/glare_model/` and `tests/eye_crop/` (CPU only, ~7 s).
 
 ## Design decisions
 
@@ -50,7 +51,7 @@ Configs: `configs/glare_model/base.yaml` (everything), `model/{small,base,large}
   - Training scores the blend the user sees: `glare + sigmoid(mask_logit_0) * delta`. The mask head is therefore trained by the image loss as well as by its own focal/Dice loss.
   - `UNBLENDED_LENS_L1` (weight 0.5) trains `delta` inside the lens even where the predicted mask is still near 0. Otherwise the blend gates its gradient to 0 early in training.
 - **Heads read the raw input** (decoder features concatenated with `glare_crop`, then a 3x3 conv). Brightness is directly visible to the mask head, and the stub can be built by setting head weights only.
-- **Outside the lens nothing may change.** `OUTSIDE_LENS_CHANGE` penalizes |delta| against the INPUT, because the target can differ from the input there (the synthesizer may JPEG/noise the glare delta). That is also why the unblended L1 is restricted to the lens.
+- **Outside the lens nothing may change, except real glare.** `OUTSIDE_LENS_CHANGE` penalizes |delta| against the INPUT (the target can differ from the input there: the synthesizer may JPEG/noise the glare delta), weighted `(1 - lens_mask) * (1 - glare_mask)`. The synthesizer renders bloom and rim glints just past the lens edge (~1.7% of glare-mask mass); GLARE_L1 asks for their removal, so the penalty skips ground-truth glare pixels. Glare-free samples stay fully guarded: outside by this term, inside the lens by LENS_L1 and UNBLENDED_LENS_L1 (their target equals the input). The unblended L1 is restricted to the lens for the same JPEG/noise reason.
 - **Dice is batch-level per channel.** Most samples have empty masks. Per-sample Dice punished their tiny background probabilities as hard as missed glare.
 - **Export path: dynamo at opset 18, then a hand-written downconvert to 17.**
   - The legacy TorchScript exporter does produce opset 17, but it emits 226 Constant, 86 Identity, and Shape/Gather/Slice nodes, which are not WebGPU kernels.
@@ -74,6 +75,11 @@ Configs: `configs/glare_model/base.yaml` (everything), `model/{small,base,large}
 - Both real paths are exercised by `test_real_modules_produce_contract_samples_through_the_adapters`, using a temporary manifest of fake faces. The real manifest JSONL did not exist yet when this was written.
 - No-glasses rows (`has_glasses: false`) with no mask file load as all-background.
 - Validation uses `DATA.VAL_SEED` per item (identical every epoch) and no photometric augmentation. Training seeds mix `torch.initial_seed()`, the index, and a draw counter.
+- **Crops use the app's resampler** (`eye_crop.extract_eye_crop_with_area_prefilter`, rule in the repo CLAUDE.md "Eye crop"): bilinear, with an integer INTER_AREA pre-shrink below scale 0.5. Lens labels go through the same resampler as one-hot planes and are argmax'd back.
+- **Simulated phone capture (`DATA.PHONE_CAPTURE`, default 50% of train AND val samples; val's mix is fixed by its seeds).** Manifest faces crop at scale ~0.6-1.2; phone photos land at ~0.15-0.4, which goes through the pre-shrink path.
+  - A target scale is drawn from [0.15, 0.6]. Lower scale means MORE photo pixels per eye, so the photo region under the crop (never the whole photo) is ENLARGED (cubic, uint8) by `native / target`. A downsample would raise the scale instead. No detail is created; what is gained is the app's exact low-scale resampling chain plus photo-resolution noise and JPEG that the pre-shrink averages down.
+  - Then Gaussian noise (sigma 0.003-0.02), then JPEG q70-95, each at 50%. Both happen before glare synthesis, so target and input share them.
+  - The path runs in uint8 to bound memory (a float32 region at scale 0.15 is ~100 MB per copy). Measured on fake 512x512 faces, worst case scale 0.15: process peak 0.7 GB, 146 ms median per item with the real renderer. Default mix: 52 ms median (native-only: 33 ms).
 - Real renderer cost: 26 ms median, 38 ms p90 per full dataset item at 512x256 with one OpenCV thread. One DataLoader worker keeps up with training (budget about 185 ms/item).
 
 ## How to run
@@ -102,7 +108,10 @@ nice -n 10 /Volumes/vega/datasets/glare-off/venv/bin/python -m glare_model.train
 
 - **Run directory:** `run_output_<hash>` hashes the config minus workers, resume, device, memory cap, and log cadence. `OUTPUT.RUN_DIRECTORY` overrides it.
 - **TensorBoard:** `train/*` holds every loss term, grad norm, LR, s/step, and peak MPS GiB. `val/*` holds the metrics plus a grid (input | prediction | target | predicted glare mask | target glare mask | predicted lost-detail mask).
-- **On normal completion** `train` also exports `<run>/exported/glare_removal.onnx`.
+  - Change guards, all mean |blended - input| in [0, 1] units: `val/clean_sample_change` (+ `_max`) over glare-free samples, and `val/outside_lens_change` over all samples, outside the lens and outside ground-truth glare.
+  - `val/clean_change_gate_passed` is 1 when this validation's checkpoint is eligible for best.
+- **Best checkpoint (`best_ema.pt`):** highest `psnr_lens` among validations whose `clean_sample_change` is at most `TRAIN.BEST_MAX_CLEAN_SAMPLE_CHANGE` (0.5/255). Failing checkpoints are never kept as best. A val set with no glare-free sample cannot be gated, and `psnr_lens` alone decides.
+- **On normal completion** `train` exports `checkpoints/best_ema.pt` to `<run>/exported/glare_removal.onnx`. It falls back to the final EMA weights, with a warning, if no checkpoint qualified.
 - **Torch 2.14 gotcha:** `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.2` alone crashes MPS init ("invalid low watermark ratio 1.4"). Set `PYTORCH_MPS_LOW_WATERMARK_RATIO` at or below it (0.15).
 
 ## Measured numbers (2026-10-05, Apple M4 16 GB, shared with other jobs, torch 2.14.1, ORT 1.30.0)
