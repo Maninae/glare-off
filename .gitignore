@@ -1,0 +1,11 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+run_output_*/
+*.pt
+*.pth
+*.ckpt
+node_modules/
+/data
+/weights
