@@ -1,0 +1,210 @@
+{
+ "version": "0fb1dba3d1845ee7",
+ "assets": [
+  {
+   "path": "404.html",
+   "bytes": 641,
+   "precache": true
+  },
+  {
+   "path": "THIRD_PARTY.md",
+   "bytes": 2829,
+   "precache": true
+  },
+  {
+   "path": "icons/apple-touch-icon.png",
+   "bytes": 6159,
+   "precache": true
+  },
+  {
+   "path": "icons/favicon-32.png",
+   "bytes": 1141,
+   "precache": true
+  },
+  {
+   "path": "icons/favicon.svg",
+   "bytes": 498,
+   "precache": true
+  },
+  {
+   "path": "icons/icon-192.png",
+   "bytes": 5032,
+   "precache": true
+  },
+  {
+   "path": "icons/icon-512.png",
+   "bytes": 14775,
+   "precache": true
+  },
+  {
+   "path": "icons/icon-maskable-512.png",
+   "bytes": 13035,
+   "precache": true
+  },
+  {
+   "path": "icons/preview.png",
+   "bytes": 48069,
+   "precache": false
+  },
+  {
+   "path": "index.html",
+   "bytes": 9578,
+   "precache": true
+  },
+  {
+   "path": "js/app_config.js",
+   "bytes": 1457,
+   "precache": true
+  },
+  {
+   "path": "js/blend/face_patch_blend.js",
+   "bytes": 1632,
+   "precache": true
+  },
+  {
+   "path": "js/eye_crop_geometry.js",
+   "bytes": 4198,
+   "precache": true
+  },
+  {
+   "path": "js/main.js",
+   "bytes": 13080,
+   "precache": true
+  },
+  {
+   "path": "js/photo/photo_compose.js",
+   "bytes": 2015,
+   "precache": true
+  },
+  {
+   "path": "js/photo/photo_file_types.js",
+   "bytes": 2630,
+   "precache": true
+  },
+  {
+   "path": "js/photo/zip_store.js",
+   "bytes": 3684,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/area_downscale.js",
+   "bytes": 5585,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/eye_crop_warp.js",
+   "bytes": 7588,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/glare_crop_pass.js",
+   "bytes": 6970,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/glare_worker.js",
+   "bytes": 11997,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/runtime_choice.js",
+   "bytes": 2549,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/worker_client.js",
+   "bytes": 4534,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/yunet_face_decode.js",
+   "bytes": 8504,
+   "precache": true
+  },
+  {
+   "path": "js/ui/compare_view.js",
+   "bytes": 3811,
+   "precache": true
+  },
+  {
+   "path": "js/ui/engine_status.js",
+   "bytes": 2000,
+   "precache": true
+  },
+  {
+   "path": "js/ui/input_doors.js",
+   "bytes": 2914,
+   "precache": true
+  },
+  {
+   "path": "js/ui/result_card.js",
+   "bytes": 10199,
+   "precache": true
+  },
+  {
+   "path": "manifest.webmanifest",
+   "bytes": 640,
+   "precache": true
+  },
+  {
+   "path": "models/face_detection_yunet_2023mar_dynamic_input.onnx",
+   "bytes": 229842,
+   "precache": false
+  },
+  {
+   "path": "models/glare_removal.onnx",
+   "bytes": 11769733,
+   "precache": false
+  },
+  {
+   "path": "styles/page.css",
+   "bytes": 7995,
+   "precache": true
+  },
+  {
+   "path": "styles/results.css",
+   "bytes": 7036,
+   "precache": true
+  },
+  {
+   "path": "styles/tokens.css",
+   "bytes": 1769,
+   "precache": true
+  },
+  {
+   "path": "vendor/onnxruntime-web-1.30.0/LICENSE",
+   "bytes": 1073,
+   "precache": false
+  },
+  {
+   "path": "vendor/onnxruntime-web-1.30.0/ort-wasm-simd-threaded.asyncify.mjs",
+   "bytes": 53057,
+   "precache": false
+  },
+  {
+   "path": "vendor/onnxruntime-web-1.30.0/ort-wasm-simd-threaded.asyncify.wasm",
+   "bytes": 26781914,
+   "precache": false
+  },
+  {
+   "path": "vendor/onnxruntime-web-1.30.0/ort-wasm-simd-threaded.mjs",
+   "bytes": 24381,
+   "precache": false
+  },
+  {
+   "path": "vendor/onnxruntime-web-1.30.0/ort-wasm-simd-threaded.wasm",
+   "bytes": 14239897,
+   "precache": false
+  },
+  {
+   "path": "vendor/onnxruntime-web-1.30.0/ort.wasm.min.mjs",
+   "bytes": 50126,
+   "precache": false
+  },
+  {
+   "path": "vendor/onnxruntime-web-1.30.0/ort.webgpu.min.mjs",
+   "bytes": 66349,
+   "precache": false
+  }
+ ]
+}

@@ -1,0 +1,71 @@
+/*
+  Design tokens: the only place a color value appears. Light and dark are designed
+  separately (app/CLAUDE.md, "Design direction").
+  Accent = the green of an anti-reflective lens coating; it marks the one primary action,
+  focus, progress and the compare lens. Nothing else is colored.
+*/
+:root {
+  color-scheme: light dark;
+  --bg: #f5f4ef;
+  --surface: #ffffff;
+  --surface-sunken: #ebeae3;
+  --ink: #191c1b;
+  --ink-soft: #565c59;
+  --ink-faint: #858b87;
+  --rule: #d8d8cf;
+  --accent: #17654f;
+  --accent-soft: #d9ebe3;
+  --on-accent: #ffffff;
+  --warn: #8a5300;
+  --warn-soft: #f6ead6;
+  --bad: #a3271d;
+  --photo-matte: #e2e1d9;
+  --scrim: rgb(25 28 27 / 0.72);
+
+  --font-body: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-display: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Modular scale, ratio 1.25 from 16px. */
+  --t-xs: 0.8rem;
+  --t-sm: 0.9rem;
+  --t-md: 1rem;
+  --t-lg: 1.25rem;
+  --t-xl: 1.5625rem;
+  --t-xxl: clamp(1.95rem, 1.2rem + 3vw, 3.05rem);
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s7: 32px;
+  --s8: 48px;
+  --s9: 72px;
+
+  --radius-photo: 6px;
+  --radius-control: 999px;
+  --page-width: 1120px;
+  --fast: 150ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121514;
+    --surface: #1b1f1d;
+    --surface-sunken: #0d0f0e;
+    --ink: #e9ece9;
+    --ink-soft: #a6ada9;
+    --ink-faint: #737a76;
+    --rule: #2c312f;
+    --accent: #6cc9a9;
+    --accent-soft: #1d3a31;
+    --on-accent: #0b1310;
+    --warn: #e6ae5c;
+    --warn-soft: #3a2c16;
+    --bad: #f0897f;
+    --photo-matte: #0d0f0e;
+    --scrim: rgb(5 7 6 / 0.78);
+  }
+}

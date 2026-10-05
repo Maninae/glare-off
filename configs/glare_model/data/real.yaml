@@ -1,0 +1,17 @@
+# REAL data: the source manifest (training_sources/) + the procedural renderer (glare_synthesis/).
+# Function paths are "package.module:function"; edit them here if the sibling modules name things differently.
+DATA:
+  SOURCE_FACE_PROVIDER:
+    TRAIN:
+      NAME: ManifestSourceFaceProvider
+      MANIFEST_PATH: /Volumes/vega/datasets/glare-off/sources/source_manifest.jsonl
+      MANIFEST_LOADER_PATH: training_sources.load_source_manifest:load_source_manifest
+      MAX_SOURCE_GLARE_SCORE: null
+    VAL:
+      NAME: ManifestSourceFaceProvider
+      MANIFEST_PATH: /Volumes/vega/datasets/glare-off/sources/source_manifest.jsonl
+      MANIFEST_LOADER_PATH: training_sources.load_source_manifest:load_source_manifest
+      MAX_SOURCE_GLARE_SCORE: null
+  GLARE_SYNTHESIZER:
+    NAME: build_glare_synthesis_module_synthesizer
+    SYNTHESIZE_FUNCTION_PATH: glare_synthesis.render_lens_glare:render_lens_glare_sample

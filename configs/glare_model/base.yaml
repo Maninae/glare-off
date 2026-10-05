@@ -1,0 +1,74 @@
+# Base training config for the glare removal model. Compose with:
+#   python -m glare_model.train --config configs/glare_model/base.yaml [KEY=VALUE ...]
+# CONFIG_GROUPS picks files under configs/glare_model/<group>/<choice>.yaml (override on the CLI,
+# e.g. CONFIG_GROUPS.MODEL=small). Later sources win: group files < this file < CLI dotlist.
+CONFIG_GROUPS:
+  MODEL: base
+  DATA: fake
+
+GLOBAL:
+  SEED: 42
+
+OUTPUT:
+  RUNS_ROOT: /Volumes/vega/datasets/glare-off/runs
+  RUN_DIRECTORY: ""          # non-empty overrides the hashed run_output_<hash> name
+
+DATA:
+  CROP_HEIGHT: 256
+  CROP_WIDTH: 512
+  VAL_SEED: 20261005         # fixed so val metrics are comparable across epochs and runs
+  VAL_SAMPLES_PER_SOURCE: 2
+  EYE_JITTER:                # fractions of eye distance, degrees for roll
+    PER_EYE_NOISE_FRACTION: 0.03
+    ROLL_DEGREES: 3.0
+    SCALE_FRACTION: 0.05
+    SHIFT_FRACTION: 0.03
+  PHOTOMETRIC:               # half-widths of uniform jitter around 1.0 (training only)
+    BRIGHTNESS: 0.15
+    CONTRAST: 0.15
+    GAMMA: 0.15
+    SATURATION: 0.2
+    WHITE_BALANCE: 0.06
+    HORIZONTAL_FLIP_PROBABILITY: 0.5
+
+DATALOADER:
+  BATCH_SIZE: 2              # micro-batch; 2 at 512x256 peaks ~2.2 GiB MPS (batch 4 OOMs under the 2.37 GiB cap)
+  NUM_WORKERS: 1             # hard cap 4 (validated); one keeps up (~26 ms/item vs 185 ms budget) and each worker costs ~0.3 GB RSS
+  VAL_BATCH_SIZE: 2
+
+SOLVER:
+  OPTIMIZER:
+    NAME: adamw
+    BETAS: [0.9, 0.99]
+    WEIGHT_DECAY: 0.0001
+  BASE_LR: 0.0005
+  MIN_LR: 0.000001
+  WARMUP_ITERS: 1000
+  MAX_ITER: 100000
+  GRADIENT_ACCUMULATION_STEPS: 4   # effective batch = BATCH_SIZE * this = 8
+  GRAD_CLIP_NORM: 1.0
+  EMA_DECAY: 0.999
+
+LOSS:
+  WEIGHTS:                   # 0 disables a term; see glare_model/losses/glare_removal_loss.py
+    BLENDED_L1: 1.0
+    LENS_L1: 2.0
+    GLARE_L1: 2.0
+    UNBLENDED_LENS_L1: 0.5
+    SSIM: 0.2
+    FFT: 0.05
+    MASK_FOCAL: 1.0
+    MASK_DICE: 0.5
+    OUTSIDE_LENS_CHANGE: 1.0
+    PERCEPTUAL_VGG: 0.0      # disabled hook (licensing gray area); raises if set > 0
+
+TRAIN:
+  DEVICE: auto               # auto = cuda > mps > cpu
+  MPS_HIGH_WATERMARK_RATIO: 0.2   # MPS allocator cap = ratio * recommended max (0.2 = 2.37 GiB on the 16 GB M4)
+  MPS_LOW_WATERMARK_RATIO: 0.15   # must be <= the high ratio or torch 2.14 refuses to init MPS
+  RESUME: true               # rerunning the same command resumes from checkpoints/last.pt
+  LOG_PERIOD: 50
+  VAL_PERIOD: 2000
+  CHECKPOINT_PERIOD: 1000
+  IMAGE_GRID_COUNT: 4
+  MAX_VAL_BATCHES: 0         # 0 = whole val set

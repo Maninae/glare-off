@@ -1,0 +1,378 @@
+/* Results: one entry per photo. The compare view is the largest element; controls sit beside it
+   on wide screens and below it on phones. */
+
+.results {
+  margin-top: var(--s7);
+}
+
+.results-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+}
+
+.results-heading {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.result-list {
+  display: grid;
+  gap: var(--s8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name download"
+    "meta download";
+  align-items: center;
+  column-gap: var(--s4);
+  margin-bottom: var(--s3);
+}
+
+.result-name {
+  grid-area: name;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--t-lg);
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-meta {
+  grid-area: meta;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.result-download {
+  grid-area: download;
+}
+
+.result-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 272px;
+  gap: var(--s6);
+  align-items: start;
+}
+
+.result[data-state="queued"] .result-body,
+.result[data-state="working"] .result-body,
+.result[data-state="no-face"] .result-body,
+.result[data-state="error"] .result-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Compare view. Before is the full canvas; After sits on top, clipped to the right of the lens. */
+.compare {
+  --split: 50%;
+  position: relative;
+  overflow: hidden;
+  background: var(--photo-matte);
+  border-radius: var(--radius-photo);
+  /* Keep the photo's own aspect at any width, and never taller than the window allows. */
+  aspect-ratio: var(--photo-aspect, 4 / 3);
+  width: min(100%, calc(var(--compare-max-height) * var(--photo-aspect-number, 1.333)));
+  --compare-max-height: 78vh;
+  touch-action: pan-y;
+}
+
+.compare canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.compare-after {
+  clip-path: inset(0 0 0 var(--split));
+}
+
+.compare[data-ready="false"] .compare-after,
+.compare[data-ready="false"] .compare-divider,
+.compare[data-ready="false"] .compare-label,
+.compare[data-ready="false"] .compare-range {
+  display: none;
+}
+
+.compare-label {
+  position: absolute;
+  top: var(--s3);
+  padding: 2px var(--s2);
+  background: var(--scrim);
+  border-radius: 3px;
+  color: #ffffff;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.compare-label-before {
+  left: var(--s3);
+}
+
+.compare-label-after {
+  right: var(--s3);
+}
+
+.compare-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--split);
+  width: 2px;
+  margin-left: -1px;
+  background: #ffffff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+/* The signature: the handle is a lens you slide across the photo. */
+.compare-lens {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.5) 0 18%, transparent 18% 100%),
+    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.02));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 75%, transparent), 0 2px 10px rgb(0 0 0 / 0.35);
+}
+
+.compare-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+.compare:has(.compare-range:focus-visible) .compare-lens {
+  box-shadow: 0 0 0 3px var(--accent), 0 0 0 6px #ffffff;
+}
+
+.compare-working {
+  position: absolute;
+  inset: auto var(--s3) var(--s3) var(--s3);
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  pointer-events: none;
+}
+
+.compare-working-text {
+  padding: var(--s1) var(--s3);
+  background: var(--scrim);
+  border-radius: var(--radius-control);
+  color: #ffffff;
+  font-size: var(--t-sm);
+}
+
+.compare[data-ready="true"] .compare-working {
+  display: none;
+}
+
+.result[data-state="working"] .compare::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.18), transparent);
+  animation: scan 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+/* Controls column. */
+.result-controls {
+  display: grid;
+  gap: var(--s5);
+  font-size: var(--t-sm);
+}
+
+.view-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.view-picker legend {
+  margin-bottom: var(--s2);
+  padding: 0;
+  color: var(--ink-soft);
+}
+
+.view-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.view-option {
+  position: relative;
+}
+
+.view-option input {
+  position: absolute;
+  opacity: 0;
+}
+
+.view-option span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: border-color var(--fast) ease;
+}
+
+.view-option input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.view-option input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.strength {
+  display: grid;
+  gap: var(--s2);
+}
+
+.strength-label {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-soft);
+}
+
+.strength-value {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"].strength-range {
+  width: 100%;
+  min-height: 32px;
+  accent-color: var(--accent);
+}
+
+.face-list {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.face-item {
+  display: grid;
+  gap: var(--s1);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+
+.face-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.face-item-title {
+  font-weight: 600;
+}
+
+.face-item-status {
+  color: var(--ink-soft);
+}
+
+.face-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.face-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.face-note {
+  margin: var(--s1) 0 0;
+  padding: var(--s2) var(--s3);
+  background: var(--warn-soft);
+  border-radius: 4px;
+  color: var(--ink);
+}
+
+.result-message {
+  margin: var(--s3) 0 0;
+  color: var(--ink-soft);
+}
+
+.result[data-state="error"] .result-message {
+  color: var(--bad);
+}
+
+@media (max-width: 860px) {
+  .result-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .result-list {
+    gap: var(--s7);
+  }
+
+  .result-head {
+    grid-template-areas:
+      "name name"
+      "meta download";
+  }
+
+  .compare {
+    --compare-max-height: 70vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result[data-state="working"] .compare::after {
+    display: none;
+  }
+}

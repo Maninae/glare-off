@@ -1,0 +1,450 @@
+/* Page chrome: header, intake (drop zone, privacy line, engine status), explainers, footer. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--t-md);
+  line-height: 1.55;
+}
+
+a {
+  color: var(--ink);
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  text-decoration-color: var(--ink-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--s4);
+  top: -48px;
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  top: var(--s3);
+}
+
+.svg-defs {
+  position: absolute;
+}
+
+/* Header: deliberately small; the drop target and the photo are the payload. */
+.site-header,
+main,
+.site-footer {
+  width: min(100% - 2 * var(--s5), var(--page-width));
+  margin-inline: auto;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding-block: var(--s5);
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  font-weight: 600;
+  font-size: var(--t-md);
+}
+
+.wordmark-mark {
+  width: 26px;
+  height: 26px;
+  color: var(--accent);
+}
+
+.site-nav {
+  display: flex;
+  gap: var(--s5);
+  font-size: var(--t-sm);
+}
+
+.site-nav a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  color: var(--ink);
+}
+
+/* Intake. */
+.intake {
+  padding-top: var(--s7);
+}
+
+.intake-heading {
+  max-width: 18ch;
+  margin: 0 0 var(--s3);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--t-xxl);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.intake-lede {
+  max-width: 52ch;
+  margin: 0 0 var(--s7);
+  color: var(--ink-soft);
+  font-size: var(--t-lg);
+  line-height: 1.45;
+}
+
+.drop-zone {
+  display: grid;
+  justify-items: center;
+  gap: var(--s3);
+  padding: clamp(var(--s7), 7vw, var(--s9)) var(--s5);
+  background: var(--surface);
+  border: 1.5px dashed var(--rule);
+  border-radius: var(--radius-photo);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--fast) ease, background-color var(--fast) ease;
+}
+
+.drop-zone:hover,
+.drop-zone[data-drag="over"] {
+  border-color: var(--accent);
+}
+
+.drop-zone-glasses {
+  width: min(200px, 52vw);
+  height: auto;
+  margin-bottom: var(--s2);
+}
+
+.glasses-frame {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.glasses-glare {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.drop-zone-title {
+  margin: 0;
+  font-size: var(--t-xl);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.drop-zone-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  margin: var(--s2) 0 0;
+}
+
+.drop-zone-or {
+  color: var(--ink-soft);
+}
+
+.drop-zone-formats {
+  max-width: 46ch;
+  margin: var(--s2) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--t-sm);
+}
+
+/* Collapsed intake once photos are in: a slim bar, so the results become the payload. */
+.intake[data-state="has-photos"] .intake-heading,
+.intake[data-state="has-photos"] .intake-lede,
+.intake[data-state="has-photos"] .drop-zone {
+  display: none;
+}
+
+.intake[data-state="has-photos"] {
+  padding-top: var(--s2);
+}
+
+/* With photos in, the status line only speaks up while loading or on error. */
+.intake[data-state="has-photos"] .engine-status[data-tone="ready"] {
+  display: none;
+}
+
+.intake[data-state="has-photos"] .add-more {
+  padding-block: var(--s3);
+}
+
+.add-more {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s4) var(--s5);
+  background: var(--surface);
+  border: 1.5px dashed var(--rule);
+  border-radius: var(--radius-photo);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--fast) ease;
+}
+
+.add-more:hover,
+.add-more[data-drag="over"] {
+  border-color: var(--accent);
+}
+
+.add-more svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.add-more-hint {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+.privacy-proof {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin: var(--s4) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--t-sm);
+}
+
+.privacy-proof svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+}
+
+/* Engine status: one quiet line; a determinate bar while the runtime and networks download. */
+.engine-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  min-height: 28px;
+  margin-top: var(--s2);
+  color: var(--ink-soft);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.engine-status-bar {
+  position: relative;
+  flex: 0 1 160px;
+  height: 3px;
+  overflow: hidden;
+  background: var(--rule);
+  border-radius: 2px;
+}
+
+.engine-status-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: var(--accent);
+  transition: width var(--fast) linear;
+}
+
+.engine-status[data-tone="ready"] .engine-status-bar,
+.engine-status[data-tone="error"] .engine-status-bar {
+  display: none;
+}
+
+.engine-status[data-tone="error"] .engine-status-text {
+  color: var(--bad);
+}
+
+.engine-status[data-tone="ready"] {
+  opacity: 0.85;
+}
+
+/* Buttons. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: 0 var(--s5);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--fast) ease, border-color var(--fast) ease, color var(--fast) ease;
+}
+
+.button-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.button-primary:hover {
+  background: color-mix(in srgb, var(--accent) 86%, var(--ink));
+}
+
+.button-primary:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.button-quiet {
+  background: transparent;
+  border-color: var(--rule);
+  color: var(--ink);
+}
+
+.button-quiet:hover {
+  border-color: var(--ink-soft);
+}
+
+/* Explainers and footer. */
+.explainer {
+  max-width: 68ch;
+  margin-top: var(--s9);
+}
+
+.explainer h2 {
+  margin: 0 0 var(--s4);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--t-xl);
+}
+
+.steps,
+.facts {
+  margin: 0;
+  padding-left: 1.3em;
+  color: var(--ink-soft);
+}
+
+.steps li,
+.facts li {
+  margin-bottom: var(--s3);
+  padding-left: var(--s1);
+}
+
+.steps strong {
+  color: var(--ink);
+}
+
+.limit-note {
+  margin: var(--s5) 0 0;
+  color: var(--ink-soft);
+}
+
+.site-footer {
+  margin-top: var(--s9);
+  padding-block: var(--s6) var(--s8);
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: var(--t-sm);
+}
+
+.site-footer a {
+  color: var(--ink-soft);
+}
+
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: var(--scrim);
+  color: #ffffff;
+  font-size: var(--t-xl);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.drag-overlay[hidden] {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .site-nav {
+    gap: var(--s4);
+  }
+
+  .intake {
+    padding-top: var(--s4);
+  }
+
+  .intake-lede {
+    font-size: var(--t-md);
+    margin-bottom: var(--s5);
+  }
+
+  .add-more-hint {
+    display: none;
+  }
+
+  /* The photo is the payload on a phone; the Privacy section below still says this in full. */
+  .intake[data-state="has-photos"] .privacy-proof {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

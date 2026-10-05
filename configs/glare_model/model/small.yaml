@@ -1,0 +1,8 @@
+# ~1.1M parameters: NAFNet width 16, one block per level. Fastest; the floor for phones.
+MODEL:
+  NAME: GlareRemovalNAFNet
+  BASE_WIDTH: 16
+  ENCODER_BLOCK_COUNTS: [1, 1, 1, 1]
+  MIDDLE_BLOCK_COUNT: 1
+  DECODER_BLOCK_COUNTS: [1, 1, 1, 1]
+  MASK_LOGIT_BIAS: -4.0

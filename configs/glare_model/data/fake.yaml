@@ -1,0 +1,11 @@
+# FAKE data: procedural faces + blob glare (glare_model/data/fake_data_sources.py). Tests and smoke runs only.
+DATA:
+  SOURCE_FACE_PROVIDER:
+    TRAIN:
+      NAME: FakeSourceFaceProvider
+      FACE_COUNT: 2048
+    VAL:
+      NAME: FakeSourceFaceProvider
+      FACE_COUNT: 32
+  GLARE_SYNTHESIZER:
+    NAME: build_fake_blob_glare_synthesizer

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!--
+  Content-Security-Policy: deny by default, allow only this page's own origin.
+  This is the technical guarantee behind "your photo never leaves this device": any code
+  that tried to contact another origin would be blocked by the browser.
+  - script-src 'self' 'wasm-unsafe-eval': our ES modules, the vendored onnxruntime-web
+    modules, and compiling its WebAssembly.
+  - worker-src 'self' blob:: the processing worker starts from a blob: bootstrap so this
+    policy also governs it (js/pipeline/worker_client.js); onnxruntime's thread workers are 'self'.
+  - connect-src 'self': fetch() of our own models and WASM. Nothing else, ever.
+  - img-src 'self' blob: data:: our icons, and blob: URLs of the user's own photos.
+  - manifest-src 'self': default-src 'none' would otherwise block the install manifest.
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' blob: data:; style-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Glare Off: remove glare from glasses in photos, privately</title>
+<meta name="description" content="Remove reflections and glare from eyeglass lenses in your photos. Free and open source. Runs entirely in your browser; your photo is never uploaded.">
+<meta name="theme-color" content="#f5f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121514" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Glare Off">
+<meta property="og:description" content="Remove glare from glasses in photos. Free, open source, and nothing is uploaded.">
+<meta property="og:image" content="icons/preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/page.css">
+<link rel="stylesheet" href="styles/results.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#drop-zone-button">Skip to choosing a photo</a>
+
+<header class="site-header">
+  <p class="wordmark"><svg class="wordmark-mark" viewBox="0 0 32 32" aria-hidden="true"><use href="#glasses-glyph"></use></svg><span id="app-name">Glare Off</span></p>
+  <nav class="site-nav" aria-label="About">
+    <a href="#how-it-works">How it works</a>
+    <a href="#privacy">Privacy</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="intake" id="intake" data-state="empty" aria-labelledby="intake-heading">
+    <h1 class="intake-heading" id="intake-heading">Take the glare off glasses in your photos.</h1>
+    <p class="intake-lede">Free, no account, no limits. The photo is processed on this device and never uploaded.</p>
+
+    <div class="drop-zone" id="drop-zone">
+      <svg class="drop-zone-glasses" viewBox="0 0 160 64" aria-hidden="true">
+        <g class="glasses-frame">
+          <rect x="8" y="12" width="60" height="42" rx="18"></rect>
+          <rect x="92" y="12" width="60" height="42" rx="18"></rect>
+          <path d="M68 27c6-6 18-6 24 0"></path>
+          <path d="M8 24L2 20M152 24l6-4"></path>
+        </g>
+        <g class="glasses-glare">
+          <path d="M22 44L46 18"></path>
+          <path d="M32 46L50 26"></path>
+          <path d="M106 44L130 18"></path>
+        </g>
+      </svg>
+      <p class="drop-zone-title" id="drop-zone-title">Drop photos here</p>
+      <p class="drop-zone-detail">
+        <button type="button" class="button button-primary" id="drop-zone-button">Choose photos</button>
+        <span class="drop-zone-or">or paste one</span>
+      </p>
+      <p class="drop-zone-formats">JPEG, PNG, WebP and HEIC (where your browser opens it). Full resolution in, full resolution out.</p>
+      <!-- Slot for "Try a sample photo" once licensed samples exist; see app/CLAUDE.md. -->
+      <div class="sample-slot" id="sample-slot" hidden></div>
+      <input type="file" id="file-input" accept="image/*,.heic,.heif" multiple hidden>
+    </div>
+
+    <button type="button" class="add-more" id="add-more-button" hidden>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"></path></svg>
+      Add photos <span class="add-more-hint">drop, paste or choose</span>
+    </button>
+
+    <p class="privacy-proof" id="privacy-proof">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2l6 3v5c0 4-3 7-6 8-3-1-6-4-6-8V5z"></path></svg>
+      <span>Nothing is uploaded. After this page loads it makes no network requests at all; turn on airplane mode and try it.</span>
+    </p>
+
+    <div class="engine-status" id="engine-status" role="status" aria-live="polite" data-tone="loading">
+      <span class="engine-status-text" id="engine-status-text">Getting ready</span>
+      <span class="engine-status-bar" aria-hidden="true"><span class="engine-status-fill" id="engine-status-fill"></span></span>
+      <button type="button" class="button button-quiet" id="engine-retry-button" hidden>Try again</button>
+    </div>
+  </section>
+
+  <section class="results" id="results" aria-label="Your photos" hidden>
+    <div class="results-toolbar">
+      <h2 class="results-heading" id="results-heading">Your photos</h2>
+      <button type="button" class="button button-quiet" id="download-all-button" hidden>Download all</button>
+    </div>
+    <ol class="result-list" id="result-list"></ol>
+  </section>
+
+  <section class="explainer" id="how-it-works" aria-labelledby="how-heading">
+    <h2 id="how-heading">How it works</h2>
+    <ol class="steps">
+      <li><strong>Find the eyes.</strong> A small face finder locates each face and its two eye centers.</li>
+      <li><strong>Clean the lenses.</strong> A straightened strip around the glasses goes through a glare-removal network, which also marks where glare was.</li>
+      <li><strong>Blend back.</strong> Only the marked pixels change, at your photo's full resolution. Every other pixel is left exactly as it was.</li>
+    </ol>
+    <p class="limit-note">Where glare turned part of an eye pure white, the detail underneath is gone. The tool fills it in plausibly, and tells you when it had to.</p>
+  </section>
+
+  <section class="explainer" id="privacy" aria-labelledby="privacy-heading">
+    <h2 id="privacy-heading">Privacy you can check</h2>
+    <ul class="facts">
+      <li>The page, the two small networks and the runtime come from this site once. After that your browser keeps them and the page works offline.</li>
+      <li>A Content Security Policy tells your browser to refuse any connection to another site, so even a bug could not send your photo anywhere.</li>
+      <li>Downloads have their metadata removed (location, camera, date). The orientation is applied to the pixels so the photo still looks right.</li>
+      <li>No account, no analytics, no ads, no cookies.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>Open source (MIT). Uses onnxruntime-web and the YuNet face detector, see <a href="THIRD_PARTY.md">third-party licenses</a>.</p>
+</footer>
+
+<div class="drag-overlay" id="drag-overlay" hidden><p>Drop to remove the glare</p></div>
+
+<svg width="0" height="0" class="svg-defs" aria-hidden="true">
+  <symbol id="glasses-glyph" viewBox="0 0 32 32"><path d="M3 13h10v6a4 4 0 01-4 4H7a4 4 0 01-4-4zM19 13h10v6a4 4 0 01-4 4h-2a4 4 0 01-4-4zM13 15c2-1.5 4-1.5 6 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path></symbol>
+</svg>
+
+<template id="result-template">
+  <li class="result" data-state="queued">
+    <div class="result-head">
+      <h3 class="result-name"></h3>
+      <p class="result-meta"></p>
+      <button type="button" class="button button-primary result-download" disabled>Download</button>
+    </div>
+    <div class="result-body">
+      <div class="compare" data-ready="false">
+        <canvas class="compare-before" aria-hidden="true"></canvas>
+        <canvas class="compare-after" aria-hidden="true"></canvas>
+        <span class="compare-label compare-label-before" aria-hidden="true">Before</span>
+        <span class="compare-label compare-label-after" aria-hidden="true">After</span>
+        <span class="compare-divider" aria-hidden="true"><span class="compare-lens"></span></span>
+        <input class="compare-range" type="range" min="0" max="100" step="0.5" value="50" aria-label="Before and after: drag to compare">
+        <p class="compare-working"><span class="compare-working-text">Waiting</span></p>
+      </div>
+      <div class="result-controls" hidden>
+        <fieldset class="view-picker">
+          <legend>Show</legend>
+          <div class="view-options"></div>
+        </fieldset>
+        <label class="strength">
+          <span class="strength-label">Strength <output class="strength-value">100%</output></span>
+          <input class="strength-range" type="range" min="0" max="100" step="1" value="100">
+        </label>
+        <ul class="face-list"></ul>
+      </div>
+    </div>
+    <p class="result-message" hidden></p>
+  </li>
+</template>
+</body>
+</html>
