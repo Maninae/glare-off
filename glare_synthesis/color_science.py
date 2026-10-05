@@ -29,16 +29,16 @@ AR_COATING_BASE_TINTS_RGB = {
 # Most visible glare reads near-white or pale blue; saturated hues show on faint residuals
 # (the renderer additionally whitens the tint where the reflection is bright).
 AR_COATING_TINT_PROBABILITIES = {
-    "pale_blue": 0.35,
-    "near_white": 0.15,
-    "green": 0.25,
-    "blue": 0.1,
-    "purple": 0.1,
-    "magenta": 0.05,
+    "pale_blue": 0.5,
+    "near_white": 0.3,
+    "green": 0.1,
+    "blue": 0.05,
+    "purple": 0.04,
+    "magenta": 0.01,
 }
 # AR residual colour is desaturated by broadband reflection off dust, smudges and the other
 # surface; mix this fraction of white back in so tints are not neon.
-AR_TINT_WHITE_MIX_RANGE = (0.3, 0.8)
+AR_TINT_WHITE_MIX_RANGE = (0.45, 0.85)
 TINT_CHANNEL_JITTER = 0.15
 
 

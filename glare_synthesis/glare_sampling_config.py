@@ -130,8 +130,9 @@ class GlareSamplingConfig:
     ghost_reflection_probability: float = 0.4
     # Low-frequency haze across the lens (sky or room gradient) added on top of the sources.
     veil_probability: float = 0.25
-    # Multiplicative low-frequency noise on the reflection (coating wear, smudges).
-    coating_texture_probability: float = 0.25
+    # Multiplicative low-frequency lumps on the reflection (coating wear, smudges, uneven room light).
+    # Always on so no wash or fill is ever a constant tint.
+    coating_texture_probability: float = 1.0
     # Residual-colour drift across the lens (incidence angle changes the AR residual hue).
     tint_gradient_probability: float = 0.35
     # Local tone mapping darkening the lens slightly around strong reflections.
@@ -139,9 +140,10 @@ class GlareSamplingConfig:
     transmission_attenuation_range: tuple[float, float] = (0.01, 0.05)
     # Camera: phone soft-knee highlight roll-off vs hard clip; bloom around clipped light.
     soft_knee_probability: float = 0.6
-    bloom_probability: float = 0.7
+    # Always on: a blown lens must glow softly past the rim, never end as a hard flat shape.
+    bloom_probability: float = 1.0
     bloom_sigma_fraction_of_lens_width_range: tuple[float, float] = (0.015, 0.06)
-    bloom_strength_range: tuple[float, float] = (0.08, 0.3)
+    bloom_strength_range: tuple[float, float] = (0.12, 0.3)
     # Reflection defocus (disc radius, as a fraction of lens width) on top of the photo's own blur.
     defocus_radius_fraction_of_lens_width_range: tuple[float, float] = (0.006, 0.06)
     motion_blur_probability: float = 0.1
