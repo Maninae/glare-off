@@ -18,7 +18,12 @@ Dependencies flow downward; leaf modules have no repo imports.
 | `render_lens_glare.py` | Entry point. `render_lens_glare_sample` = `sample_glare_scene` (all randomness) + `render_glare_scene` (deterministic). Owns the region of interest and data_dict assembly |
 | `glare_sampling_config.py` | `LightSourceType`, `GlareSeverity`, `GlareSamplingConfig`: the whole sampling distribution |
 | `glare_scene.py` | Dataclasses of one sampled scene (`GlareScene`, `SampledLightSource`, `ReflectionPlacement`, `LensVeil`) |
-| `glare_scene_sampling.py` | Mirror optics (reflection size), two-lens placement, ghosts, coating, camera choices |
+| `glare_scene_sampling.py` | Picks HDRI vs procedural; mirror optics (reflection size), two-lens placement, ghosts, coating, camera choices |
+| `hdri_scene_sampling.py` | Image-based reflection choices: HDRI, lens radius and tilts, emitter aiming, reflectance x exposure, defocus |
+| `hdri_reflection_rendering.py` | Per-pixel sphere-mirror rays, environment rotation, equirect lookup; exact emitter-aiming solve |
+| `hdri_environment_library.py` | Baked-HDRI index by category plus a per-process LRU cache of 8 maps |
+| `download_polyhaven_hdris.py` | `python -m`: polite, resumable, md5-verified Poly Haven 1k download plus a manifest |
+| `bake_hdri_environment_maps.py` | `python -m`: HDR to float16 1024x512 `.npz` (diffuse-mean normalized, emitter directions) |
 | `light_source_registry.py` | Per-type physical size, distance, colour temperature, spread, rotation, brightness ceiling, and drawer |
 | `emitter_canvases.py` | Ring light, softbox/umbrella, point glints, strips, ceiling grid canvases |
 | `scene_source_canvases.py` | Window with mullions and outdoor scene, screen with UI blocks, sky wash, room environment |
@@ -36,16 +41,37 @@ To add a light type: add a `LightSourceType` member, a drawer returning an (N, N
 
 ## Physical model
 
-All light is added in linear RGB. Per sample:
+All light is added in linear RGB.
+
+**Image-based reflections (60% of glared samples, `hdri_reflection_share`).** 260 Poly Haven HDRIs at `/Volumes/vega/datasets/glare-off/hdri/polyhaven/`: 85 indoor, 85 outdoor, 45 studio, 45 night. All CC0-1.0, per https://polyhaven.com/license (checked 2026-10-05: "You can use our assets for any purpose, including commercial work."); recorded per row in `hdri_download_manifest.jsonl`.
+- **Geometry:** each lens pixel is a point on a sphere of radius R = 0.53/BC (10% flat tail R = 0.6-5.4 m). Its normal is tilted by face-form wrap (0-8°, mirrored per lens), a shared head yaw (sd 8°) and pantoscopic/head pitch (-6 to 14°). The camera ray at distance D is mirrored and looked up in the rotated equirect.
+- **What falls out:** minification, barrel distortion, the same handedness in both lenses, per-lens viewpoint and parallax.
+- **Aiming:** 75% of samples rotate the environment so a bright emitter (sun, window, lamp; top 2% of directions, weights power^0.35) lands on a random lens point. The closed-form pitch/yaw solve is exact to 1e-5°.
+- **Brightness:** HDRIs are baked normalized to the diffuse mean (luminance clipped at the 99.5th percentile, i.e. a face in shade or sky light). Light = face linear level / 0.35 albedo × reflectance (coated 0.5-1.5%, uncoated 4-8%) × exposure jitter 0.5-12. Suns, lamps and windows clip and bloom on their own; the rest stays a veil.
+- **Back-surface ghost:** 60% probability, a more curved surface (0.35-0.8 R), 0.3-0.9x, tilted up to ±4°.
+- **Defocus:** the image of infinity sits at f = R/2, so the blur circle = aperture × f/(D+f), with aperture 1.5-12 mm (phone to large sensor).
+- **Companion emitter:** 25% of HDRI samples add one procedural ring light, glint, strip or screen.
+
+**Every glared sample (both paths):**
+- **Strength-dependent tint:** the coating tint is full below reflection luminance 0.08 and fades to white by 0.8, so saturated green/purple appears only on faint residuals. The palette is mostly pale blue or near-white.
+- **Strength ramp across the lens:** 60% probability, gain 1 ± 0.2-0.7.
+- **Soft rim, drawn per sample:** erosion 0-2 px and feather sigma 0.5-1.5 px, clamped inside the lens. The lens mask's polygon corners are rounded first (blur sigma 2 px, then threshold).
+
+**Procedural path (40%):**
 
 1. **Mirror size.** The lens front surface is a convex mirror, f = R/2, with R = 0.53 / base curve (1-8 D), giving f = 3-26 cm. A 10% tail uses f = 0.3-2.7 m (Private Eye's measured range), which produces lens-filling washes. Reflection size relative to the lens is H·f/(d+f) · D/(D+d_i) / lens_width.
    - The research doc's Private Eye f (mean 110 cm) alone would make a 0.3 m ring light 2-4 lens widths wide.
    - The real ring-light reference shows it at about 0.6 lens widths, which base-curve f reproduces.
 2. **Placement.** The same source appears in both lenses with the same orientation and handedness. The x offset = mirrored wrap term + common source-direction term; the second lens gets ±0.1 jitter, 0.9-1.1 scale and 0.7-1.0 intensity. 15% of samples show the source in one lens only. Per-lens barrel distortion k1 0.05-0.3, keystone ±0.1, vertical squash 0.85-1. Horizontal foreshortening = lens width / widest lens, which covers head-turned crops.
 3. **Lens layers.**
-   - Ghost (inner-surface reflection): 40% probability, 0.3-1.2x scale, 0.1-0.35x intensity.
-   - Veil: 40% probability, 0.005-0.04 linear, gradient with soft lumps.
-   - AR coating: 70% of lenses. Tint is green/blue/purple/magenta, mixed 50-90% with white so blown cores read near-white. 35% of coated lenses get a tint drift across the lens.
+   - Ghost (inner-surface reflection): 40% probability, 0.3-1.2x scale, 0.1-0.35x intensity. Ring lights use 70% and 0.2-0.5x, giving the small inner ring.
+   - Veil: 25% probability, 0.005-0.04 linear, gradient with soft lumps.
+   - AR coating: 70% of lenses. Palette is pale blue, near-white, green, blue, purple, magenta; 35% of coated lenses get a tint drift across the lens.
+   - Emitter texture:
+     - Ring lights: uneven width, LED dots or diffuser grain, glow, sometimes a partial arc.
+     - Softboxes: hot spot plus a darker baffle band.
+     - Strips: thin, with a glow and sagging ends.
+     - Washes: lumps plus streaks.
    - Coating wear: 25% probability.
    - Rim falloff: floor 0.6-1.0.
    - Soft lens mask: eroded 1.5 px, feathered, clamped to the lens.
@@ -56,7 +82,9 @@ All light is added in linear RGB. Per sample:
    - Shot noise: variance g·R at the photo's own gain g (estimated with the Immerkaer method), scaled 0.7-1.4x.
    - JPEG (50%, quality 60-95) applied as clean + jpeg(glared) - jpeg(clean).
 6. **Brightness.** Peak added linear light (1 = clip). WEAK is 0.06-0.45 (53% of glared samples); STRONG is 0.8-8 (47%). Per-type ceilings: environment 0.2, screen 1.0, sky wash 1.3, window 2.0. Point glints get a 2-6x boost and strips 1-2.5x, because blur spreads their energy.
-7. **Mix.** 12% glare-free; 1/2/3 sources at 60/30/10%.
+7. **Mix.**
+   - 12% glare-free.
+   - Glared samples are 60% HDRI and 40% procedural. Procedural samples have 1/2/3 sources at 60/30/10%, mostly rings, screens, glints, strips and softboxes; windows, skies and rooms now come from HDRIs.
 
 ## What differs between input and target
 
@@ -83,12 +111,14 @@ Both are computed on the noise-free, JPEG-free render.
 
 ## Speed
 
-Measured with `benchmark_render_speed` on the M4, one thread, development crops:
+Measured with `benchmark_render_speed` on the M4, one thread, development crops, default config (60% HDRI), baked maps cached:
 
 | Crop size | Mean | p90 | Max |
 |---|---|---|---|
-| 512x256 | 22.7 ms | 35.7 ms | 46 ms |
-| 1024x512 | 91.5 ms | 148 ms | |
+| 512x256 | 22.5 ms | 34.5 ms | 50 ms |
+| 1024x512 | 92.7 ms | 147 ms | |
+
+Peak memory for the whole benchmark process is 0.6 GB; the cache holds 8 maps, about 50 MB.
 
 ## Review
 
@@ -103,10 +133,11 @@ Development crops and hand-drawn lens masks live in `synthesis-review/dev-crops/
 
 ## Known realism gaps
 
-- Large sky washes are too uniform: a smooth tinted fill that reads like a colour filter. Real sunlight washes have streaks, scene structure, and are whiter.
-- Shapes are drawn as clean vector primitives. Real ring lights and softboxes show diffuser texture, LED dots, and irregular edges.
-- Window panes at high brightness become flat white rectangles with crisp mullions, which look pasted.
-- No reflected scene geometry (the photographer, the phone, room objects) beyond the blurred procedural environment, which is low-detail.
-- No catchlight interaction: corneal reflections are not added, and glare does not interact with the eye's own catchlight.
-- AR tint is uniform per lens apart from the drift. Real coatings show angle-dependent rainbow edges near the rim.
-- Calibrated only against 3 real reference crops plus by-eye judgement; there is no paired real evaluation yet.
+- **Validation:** judged against only 3 real reference crops and by eye. There is no paired real evaluation yet, and no run yet on real manifest sources (the manifest did not exist).
+- **Equirect resolution:** 0.35° per pixel at 1024x512. A flat lens (narrow field of view) shows the reflected scene slightly soft.
+- **Outdoor scenes:** the reflected sky and horizon read correctly but milkier and lower-contrast than the real outdoor reference, and sun glints are small discs.
+- **HDRIs are at infinity:** there is no near-field parallax and no reflection of the photographer, phone or the person's own face and hands.
+- **Uniform tints:** faint whole-lens tinted fills (green/purple) still sometimes read as a colour filter.
+- **Polygon outline:** blown single-lens fills on hand-drawn polygon dev masks still show the outline. Real segmenter masks are smoother, and corner rounding helps.
+- **Procedural shapes:** they remain cleaner than real fixtures. Very large rings become crescent washes that look odd.
+- **Windows:** procedural windows at high brightness are flat white rectangles. They are now rare (3%); HDRI windows look much better.
