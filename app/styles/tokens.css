@@ -1,71 +1,54 @@
 /*
-  Design tokens: the only place a color value appears. Light and dark are designed
-  separately (app/CLAUDE.md, "Design direction").
-  Accent = the green of an anti-reflective lens coating; it marks the one primary action,
-  focus, progress and the compare lens. Nothing else is colored.
+  Design tokens: the only place a color value appears. The page is an eye chart
+  (app/CLAUDE.md, "Design"): black ink on white, inverted in dark mode, and the duochrome
+  red/green pair from the bottom of a real chart, used for ONE thing only: the BEFORE/AFTER
+  labels and the two edges of the compare divider. No other accent anywhere.
 */
+@font-face {
+  font-family: "Optician Sans";
+  src: url("../fonts/OpticianSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light dark;
-  --bg: #f5f4ef;
-  --surface: #ffffff;
-  --surface-sunken: #ebeae3;
-  --ink: #191c1b;
-  --ink-soft: #565c59;
-  --ink-faint: #858b87;
-  --rule: #d8d8cf;
-  --accent: #17654f;
-  --accent-soft: #d9ebe3;
-  --on-accent: #ffffff;
-  --warn: #8a5300;
-  --warn-soft: #f6ead6;
-  --bad: #a3271d;
-  --photo-matte: #e2e1d9;
-  --scrim: rgb(25 28 27 / 0.72);
+  --paper: #ffffff;
+  --ink: #111111;
+  --ink-gray: #767676; /* 4.5:1 on white: acuity labels, sublabels, status */
+  --ink-hairline: #d4d4d4; /* the empty part of the progress bar only */
+  /* Duochrome blocks carry black letters; red nudged from #d81e05 so black reaches 5:1. */
+  --duochrome-red: #e8380d;
+  --duochrome-green: #0f9d58;
+  --on-duochrome: #000000;
+  --photo-frame: var(--ink);
 
-  --font-body: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  --font-display: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-chart: "Optician Sans", "Arial Black", Arial, sans-serif;
+  --font-plain: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 
-  /* Modular scale, ratio 1.25 from 16px. */
-  --t-xs: 0.8rem;
-  --t-sm: 0.9rem;
-  --t-md: 1rem;
-  --t-lg: 1.25rem;
-  --t-xl: 1.5625rem;
-  --t-xxl: clamp(1.95rem, 1.2rem + 3vw, 3.05rem);
+  /* Chart letters are tracked wide, like optotypes spaced one letter-width apart. */
+  --chart-tracking: 0.12em;
 
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
   --s4: 16px;
-  --s5: 20px;
-  --s6: 24px;
-  --s7: 32px;
-  --s8: 48px;
-  --s9: 72px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 72px;
 
-  --radius-photo: 6px;
-  --radius-control: 999px;
-  --page-width: 1120px;
-  --fast: 150ms;
+  --chart-width: 820px;
+  --sheet-width: 1240px;
+  --acuity-gutter: 4.75rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121514;
-    --surface: #1b1f1d;
-    --surface-sunken: #0d0f0e;
-    --ink: #e9ece9;
-    --ink-soft: #a6ada9;
-    --ink-faint: #737a76;
-    --rule: #2c312f;
-    --accent: #6cc9a9;
-    --accent-soft: #1d3a31;
-    --on-accent: #0b1310;
-    --warn: #e6ae5c;
-    --warn-soft: #3a2c16;
-    --bad: #f0897f;
-    --photo-matte: #0d0f0e;
-    --scrim: rgb(5 7 6 / 0.78);
+    --paper: #000000;
+    --ink: #f4f4f4;
+    --ink-gray: #8c8c8c;
+    --ink-hairline: #333333;
   }
 }

@@ -1,54 +1,64 @@
 {
- "version": "0e0057c915132bac",
+ "version": "e764f7bcd5bddb17",
  "assets": [
   {
    "path": "404.html",
-   "bytes": 641,
+   "bytes": 743,
    "precache": true
   },
   {
    "path": "THIRD_PARTY.md",
-   "bytes": 2829,
+   "bytes": 3285,
+   "precache": true
+  },
+  {
+   "path": "fonts/OpticianSans-OFL.txt",
+   "bytes": 4303,
+   "precache": true
+  },
+  {
+   "path": "fonts/OpticianSans-Regular.woff2",
+   "bytes": 12920,
    "precache": true
   },
   {
    "path": "icons/apple-touch-icon.png",
-   "bytes": 6159,
+   "bytes": 3103,
    "precache": true
   },
   {
    "path": "icons/favicon-32.png",
-   "bytes": 1141,
+   "bytes": 634,
    "precache": true
   },
   {
    "path": "icons/favicon.svg",
-   "bytes": 498,
+   "bytes": 380,
    "precache": true
   },
   {
    "path": "icons/icon-192.png",
-   "bytes": 5032,
+   "bytes": 2533,
    "precache": true
   },
   {
    "path": "icons/icon-512.png",
-   "bytes": 14775,
+   "bytes": 7516,
    "precache": true
   },
   {
    "path": "icons/icon-maskable-512.png",
-   "bytes": 13035,
+   "bytes": 7437,
    "precache": true
   },
   {
    "path": "icons/preview.png",
-   "bytes": 48069,
+   "bytes": 29108,
    "precache": false
   },
   {
    "path": "index.html",
-   "bytes": 9578,
+   "bytes": 9411,
    "precache": true
   },
   {
@@ -138,7 +148,7 @@
   },
   {
    "path": "js/ui/compare_view.js",
-   "bytes": 3811,
+   "bytes": 3159,
    "precache": true
   },
   {
@@ -173,17 +183,17 @@
   },
   {
    "path": "styles/page.css",
-   "bytes": 7995,
+   "bytes": 8277,
    "precache": true
   },
   {
    "path": "styles/results.css",
-   "bytes": 7036,
+   "bytes": 6631,
    "precache": true
   },
   {
    "path": "styles/tokens.css",
-   "bytes": 1769,
+   "bytes": 1592,
    "precache": true
   },
   {

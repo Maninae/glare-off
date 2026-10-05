@@ -22,6 +22,8 @@ const CONTENT_TYPES = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".md": "text/markdown; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".woff2": "font/woff2",
 };
 
 export function loadPlaywright() {

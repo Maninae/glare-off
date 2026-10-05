@@ -39,18 +39,19 @@ flowchart LR
 | `js/photo/zip_store.js` | STORE-only ZIP writer with CRC-32 for "Download all". |
 | `js/ui/input_doors.js` | File picker, whole-page drag-and-drop, paste. |
 | `js/ui/engine_status.js` | The status line: real-MB download progress, ready, error with Try again. |
-| `js/ui/compare_view.js` | Before/after canvases, the lens divider, the transparent range input that drives it, the one sweep animation. |
+| `js/ui/compare_view.js` | Before/after canvases, the red/green divider with its plain handle, the transparent range input that drives it. No animation (the one fade is CSS). |
 | `js/ui/result_card.js` | One photo: states, view picker (whole photo / eyes up close), strength, per-face toggles, lost-detail note, Download. Redraws are async (they may wait for a region re-read). |
 | `sw.js` | Service worker: shell precache, runtime caching of models and ORT, COOP/COEP/CORP headers on everything it serves. |
 | `asset_manifest.json` | Generated list of every served file with sizes; feeds the SW precache, the cache version and the progress bar. |
-| `styles/tokens.css`, `page.css`, `results.css` | Tokens (the only color values, light and dark), page chrome, the results. |
+| `styles/tokens.css`, `page.css`, `results.css` | Tokens (the only color values, light and dark, and the `@font-face`), the eye chart and its collapsed header row, the contact sheet. |
+| `fonts/` | Optician Sans (OFL 1.1) woff2 and its license text. Self-hosted; see `THIRD_PARTY.md`. |
 | `models/` | `face_detection_yunet_2023mar_dynamic_input.onnx` (served), the stock YuNet (Python only, not served), `glare_removal.onnx` (owned by `glare_model/`; see its README). |
 | `vendor/onnxruntime-web-1.30.0/` | Two ORT builds, verbatim from the npm tarball. See `THIRD_PARTY.md`. |
-| `icons/`, `manifest.webmanifest`, `404.html` | Favicon set rendered from `icons/favicon.svg`, install manifest, link preview card. |
+| `icons/`, `manifest.webmanifest`, `404.html` | Favicon set rendered from `icons/favicon.svg` (black tile, white chart glasses), install manifest, link preview card (a crop of the chart's top rows). |
 
 ## Invariants (do not relax while iterating)
 
-- **No other origin, ever.** CSP `default-src 'none'`, `connect-src 'self'`. The page's privacy sentence ("makes no network requests after it loads") is pinned by the e2e test; any change that makes it false is out of scope.
+- **No other origin, ever.** CSP `default-src 'none'`, `connect-src 'self'`. The page's privacy row ("Once loaded, it makes no network requests") is pinned by the e2e test; any change that makes it false is out of scope.
 - **The worker must start from the blob bootstrap** in `worker_client.js`. A worker loaded from its own URL takes its CSP from HTTP headers, and static hosts send none.
 - **Untouched pixels stay byte-identical.** A crop pixel whose mask is below 0.5/255, or whose `mask * (clean - crop)` is below half a level on all three channels, gets delta 0 and mask 0 (and does not count toward "glare found" or the lost-detail note). So an idle mask head (~0.02 everywhere) touches nothing by construction, the warped delta is exactly 0 outside the mask, and `blendFacePatch` leaves those bytes alone. Downloads are a fresh decode of the original with only the patched regions pasted.
 - **Per-photo memory does not scale with the photo.** Face results keep crop-space layers only (~2 MB per glare face at 512x256). Full-res region bytes and warped deltas (~16 B per region pixel) exist for one photo at a time (`visible_photo_regions.js`) and inside the worker during an export. The e2e test asserts no face result holds a region-size array.
@@ -91,15 +92,23 @@ Engine start: ~0.5-1 s on WASM, ~1-2.3 s on WebGPU (shader compile), once per vi
 
 The glare model dominates the gzip total; the fp16 export (`glare_removal_fp16.onnx`, about half) is the next lever.
 
-## Design direction
+## Design: the eye chart
 
-- **Brief:** PURPOSE: someone whose glasses caught the light fixes a photo quickly and trusts nothing left the device. METAPHOR: an optician's bench, quiet and clinical-warm, where the photo is the only rich thing. TYPOGRAPHY: system UI sans (no font downloads fits the privacy claim) plus the system serif (`ui-serif`, New York / Georgia) for the one headline. PALETTE: warm paper ground `#f5f4ef`, near-black ink, one accent: the green of an anti-reflective lens coating (`#17654f` light, `#6cc9a9` dark); amber only for the lost-detail note. SIGNATURE: the before/after divider handle is a small round lens you drag across the photo; when a result lands it sweeps once from "before" to the middle (the page's one motion moment). COMPOSITION: single column; the drop target is the largest element until a photo arrives, then collapses to a slim "Add photos" bar so the result becomes the payload; controls sit beside the photo on wide screens, below it on phones.
-- Chosen without the owner (unavailable); deliberately far from the reference site's purple SaaS gradient. Dark mode is its own palette (deep green-gray ground, softened mint accent), not an inversion.
-- Accessibility: the compare is a real `<input type=range>` (keyboard, screen readers); visible `:focus-visible` rings; reduced motion skips the sweep and the scan shimmer; tap targets >= 36-44 px.
+The page IS a Snellen chart: everyone who wears glasses has stood in front of one. Owner's rule: commit to it; do not drift back toward cards, pills, serif headlines or a soft accent.
+
+- **Canvas:** white `#ffffff`, ink `#111`; dark mode is the chart inverted (`#000` ground, `#f4f4f4` ink) via `prefers-color-scheme`, no toggle. One centered column (`--chart-width` 820 px); the contact sheet widens to `--sheet-width` 1240 px.
+- **Rows shrink as you read down**, each a 3-column grid `[gutter | centered text | acuity label]`: the glasses glyph (row 1, the "big E"), the headline, DROP A PHOTO ANYWHERE ON THIS PAGE with the CHOOSE PHOTOS block, the two promise rows, then one fact per row down to 20/10. Row sizes use container units so each row keeps its line count; one line per row on desktop. Acuity labels (20/200 ... 20/10) are the one wink: small gray system sans, `aria-hidden`, hidden below 480 px. The engine status is the bottom-most tiny gray row.
+- **Type:** Optician Sans (built from eye-chart optotypes), uppercase via CSS, tracked `0.12em`, for every chart row and control label. System sans, small, gray, sentence case only for acuity labels, sublabels, status, file meta, and numbers. The glyph's stroke is a fifth of the lens height, matching the letters.
+- **Color:** black and white only. The duochrome red `#e8380d` / green `#0f9d58` (black letters on them, as on a chart's duochrome panel) appear in exactly one place: the BEFORE/AFTER blocks and the divider's two edges. Errors and notes are plain ink. Focus: 2 px ink outline.
+- **Forbidden:** borders on containers, radii, shadows, gradients, pills, icons other than the glasses glyph, custom-drawn toggles. The one solid control is a black rectangle with white chart letters (CHOOSE PHOTOS, DOWNLOAD); secondary actions are underlined chart text (ADD PHOTOS, DOWNLOAD ALL, TRY AGAIN).
+- **Results:** the chart collapses to a header row (glyph, GLARE OFF, ADD PHOTOS, DOWNLOAD ALL); photos form a contact sheet (two-up when wide, `auto-fit`), each in a 2 px ink frame drawn with `outline` so the photo keeps its exact aspect. Controls are small uppercase chart rows with native radios, range and checkboxes (`accent-color: ink`).
+- **Motion:** none except the divider following the pointer and a 320 ms fade of the cleaned side when a result lands (off under reduced motion).
+- **Whole page is the drop target** (window listeners in `input_doors.js`); row 3 (`#drop-zone`) also opens the picker on click; paste works anywhere.
+- Accessibility: the compare is a real `<input type=range>`; chart text stays sentence case in the DOM (screen readers do not spell out capitals); text contrast >= 4.5:1 (gray `#767676` / `#8c8c8c`, black on red 5.0:1, on green 6.0:1); tap targets >= 44 px.
 
 ## Empty state and the sample slot
 
-There are no demo photos yet (licensing). `#sample-slot` in the drop zone is hidden and empty; to add "Try a sample", put CC-licensed or consented images under `samples/`, list them with attribution in `THIRD_PARTY.md`, render a button into the slot that feeds the file through `addPhotos([file])` in `main.js`, and re-run the manifest sync.
+There are no demo photos yet (licensing). `#sample-slot` in chart row 3 is hidden and empty; to add "Try a sample", put CC-licensed or consented images under `samples/`, list them with attribution in `THIRD_PARTY.md`, render a button into the slot that feeds the file through `addPhotos([file])` in `main.js`, and re-run the manifest sync.
 
 ## Run locally
 

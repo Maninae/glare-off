@@ -1,4 +1,15 @@
-/* Page chrome: header, intake (drop zone, privacy line, engine status), explainers, footer. */
+/*
+  Page chrome: the eye chart (empty state), its collapsed header row (photos in), the engine
+  status row, the footer and the drop overlay.
+
+  - Every chart row is a 3-column grid: [gutter | centered text | acuity label]. The left gutter
+    mirrors the label column so the text stays optically centered on the page.
+  - Row sizes are computed from the row's own width (container units), minus both gutters,
+    so each row keeps its line count at any width. Below 480 px the labels go and the
+    gutters collapse to zero.
+  - Rules that keep the direction (app/CLAUDE.md, "Design"): no borders, no radii, no
+    shadows, no gradients, no accent color here. Red/green live only in results.css.
+*/
 
 *,
 *::before,
@@ -16,34 +27,39 @@ html {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-body);
-  font-size: var(--t-md);
-  line-height: 1.55;
+  font-family: var(--font-plain);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 a {
-  color: var(--ink);
-  text-decoration-color: var(--rule);
+  color: inherit;
   text-underline-offset: 3px;
 }
 
-a:hover {
-  text-decoration-color: var(--ink-soft);
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .skip-link {
   position: absolute;
   left: var(--s4);
-  top: -48px;
+  top: -64px;
   padding: var(--s2) var(--s3);
-  background: var(--surface);
+  background: var(--ink);
+  color: var(--paper);
   z-index: 10;
 }
 
@@ -55,247 +71,235 @@ a:hover {
   position: absolute;
 }
 
-/* Header: deliberately small; the drop target and the photo are the payload. */
-.site-header,
-main,
-.site-footer {
-  width: min(100% - 2 * var(--s5), var(--page-width));
+/* ---------- The chart ---------- */
+
+.chart {
+  width: min(100% - 2 * var(--s4), var(--chart-width));
   margin-inline: auto;
+  padding-top: clamp(var(--s6), 9vh, 104px);
 }
 
-.site-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s4);
-  padding-block: var(--s5);
+.chart-rows {
+  container-type: inline-size;
+  /* Usable text width of a row: the column minus both gutters. */
+  --row-text-width: calc(100cqi - 2 * var(--acuity-gutter));
 }
 
-.wordmark {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
+.chart-facts {
   margin: 0;
-  font-weight: 600;
-  font-size: var(--t-md);
+  padding: 0;
+  list-style: none;
 }
 
-.wordmark-mark {
-  width: 26px;
-  height: 26px;
-  color: var(--accent);
+.chart-row {
+  display: grid;
+  grid-template-columns: var(--acuity-gutter) minmax(0, 1fr) var(--acuity-gutter);
+  align-items: baseline;
+  padding-block: 0.42em;
 }
 
-.site-nav {
-  display: flex;
-  gap: var(--s5);
-  font-size: var(--t-sm);
+.chart-row > :first-child {
+  grid-column: 2;
 }
 
-.site-nav a {
-  color: var(--ink-soft);
-  text-decoration: none;
-}
-
-.site-nav a:hover {
-  color: var(--ink);
-}
-
-/* Intake. */
-.intake {
-  padding-top: var(--s7);
-}
-
-.intake-heading {
-  max-width: 18ch;
-  margin: 0 0 var(--s3);
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: var(--t-xxl);
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+.chart-text {
+  margin: 0;
+  font-family: var(--font-chart);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: var(--chart-tracking);
+  /* Tracking adds space after the last letter; mirror it before the first to stay centered. */
+  padding-left: var(--chart-tracking);
+  text-align: center;
+  text-transform: uppercase;
   text-wrap: balance;
 }
 
-.intake-lede {
-  max-width: 52ch;
-  margin: 0 0 var(--s7);
-  color: var(--ink-soft);
-  font-size: var(--t-lg);
-  line-height: 1.45;
+.acuity {
+  grid-column: 3;
+  justify-self: end;
+  color: var(--ink-gray);
+  font-family: var(--font-plain);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
-.drop-zone {
+/* Row 1, the "big E": the glasses glyph. */
+.chart-row-1 {
+  align-items: center;
+  padding-block: 0 0.2em;
+}
+
+.chart-glasses {
+  justify-self: center;
+  width: min(300px, 46cqi);
+  height: auto;
+  color: var(--ink);
+}
+
+.chart-row-2 {
+  font-size: clamp(26px, var(--row-text-width) / 11.2, 60px);
+  padding-block: 0.32em 0.38em;
+}
+
+.chart-row-2 .chart-text {
+  font-size: 1em;
+}
+
+.chart-row-3 {
+  font-size: clamp(17px, var(--row-text-width) / 23.4, 29px);
+  cursor: pointer;
+}
+
+.chart-cell {
   display: grid;
   justify-items: center;
   gap: var(--s3);
-  padding: clamp(var(--s7), 7vw, var(--s9)) var(--s5);
-  background: var(--surface);
-  border: 1.5px dashed var(--rule);
-  border-radius: var(--radius-photo);
-  text-align: center;
+}
+
+.chart-row-4 {
+  font-size: clamp(15px, var(--row-text-width) / 29, 23px);
+  padding-top: 0.9em;
+}
+
+.chart-row-5 { font-size: clamp(14px, var(--row-text-width) / 34, 20px); }
+.chart-row-6 { font-size: clamp(13px, var(--row-text-width) / 40, 16.5px); padding-top: 0.9em; }
+.chart-row-7 { font-size: clamp(12.5px, var(--row-text-width) / 44, 15px); }
+.chart-row-8 { font-size: clamp(12px, var(--row-text-width) / 48, 13.75px); }
+.chart-row-9 { font-size: clamp(11.5px, var(--row-text-width) / 52, 12.75px); }
+.chart-row-10 { font-size: clamp(11px, var(--row-text-width) / 56, 11.75px); }
+.chart-row-11 { font-size: 11px; }
+
+/* The one solid control: a black rectangle with white chart letters. */
+.chart-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  margin-top: var(--s2);
+  padding: 0 28px 0 calc(28px + var(--chart-tracking));
+  background: var(--ink);
+  border: 0;
+  border-radius: 0;
+  color: var(--paper);
+  font-family: var(--font-chart);
+  font-size: 17px;
+  letter-spacing: var(--chart-tracking);
+  text-transform: uppercase;
   cursor: pointer;
-  transition: border-color var(--fast) ease, background-color var(--fast) ease;
 }
 
-.drop-zone:hover,
-.drop-zone[data-drag="over"] {
-  border-color: var(--accent);
+.chart-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
-.drop-zone-glasses {
-  width: min(200px, 52vw);
-  height: auto;
-  margin-bottom: var(--s2);
+.chart-button:disabled {
+  background: var(--ink-gray);
+  text-decoration: none;
+  cursor: default;
 }
 
-.glasses-frame {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* Text-only actions (Add photos, Download all, Try again): an underlined chart line. */
+.text-action {
+  min-height: 44px;
+  padding: 0 var(--s1);
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font-family: var(--font-chart);
+  font-size: 14px;
+  letter-spacing: var(--chart-tracking);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+  text-transform: uppercase;
+  cursor: pointer;
 }
 
-.glasses-glare {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 4;
-  stroke-linecap: round;
-  opacity: 0.55;
+.text-action:disabled {
+  color: var(--ink-gray);
+  cursor: default;
 }
 
-.drop-zone-title {
+.sublabel {
+  max-width: 44ch;
   margin: 0;
-  font-size: var(--t-xl);
-  font-weight: 600;
-  line-height: 1.2;
+  color: var(--ink-gray);
+  font-family: var(--font-plain);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
 }
 
-.drop-zone-detail {
+/* ---------- Collapsed: photos are in, the chart becomes one header row ---------- */
+
+.chart-header {
+  display: none;
+}
+
+.chart[data-state="has-photos"] {
+  width: min(100% - 2 * var(--s4), var(--sheet-width));
+  padding-top: var(--s4);
+}
+
+.chart[data-state="has-photos"] .chart-rows {
+  display: none;
+}
+
+.chart[data-state="has-photos"] .chart-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: var(--s3);
-  margin: var(--s2) 0 0;
+  gap: var(--s2) var(--s5);
 }
 
-.drop-zone-or {
-  color: var(--ink-soft);
-}
-
-.drop-zone-formats {
-  max-width: 46ch;
-  margin: var(--s2) 0 0;
-  color: var(--ink-soft);
-  font-size: var(--t-sm);
-}
-
-/* Collapsed intake once photos are in: a slim bar, so the results become the payload. */
-.intake[data-state="has-photos"] .intake-heading,
-.intake[data-state="has-photos"] .intake-lede,
-.intake[data-state="has-photos"] .drop-zone {
-  display: none;
-}
-
-.intake[data-state="has-photos"] {
-  padding-top: var(--s2);
-}
-
-/* With photos in, the status line only speaks up while loading or on error. */
-.intake[data-state="has-photos"] .engine-status[data-tone="ready"] {
-  display: none;
-}
-
-.intake[data-state="has-photos"] .add-more {
-  padding-block: var(--s3);
-}
-
-.add-more {
+.chart-brand {
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  width: 100%;
-  padding: var(--s4) var(--s5);
-  background: var(--surface);
-  border: 1.5px dashed var(--rule);
-  border-radius: var(--radius-photo);
-  color: var(--ink);
-  font: inherit;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color var(--fast) ease;
+  gap: var(--s3);
+  margin: 0 auto 0 0;
+  font-family: var(--font-chart);
+  font-size: 22px;
+  letter-spacing: var(--chart-tracking);
+  text-transform: uppercase;
 }
 
-.add-more:hover,
-.add-more[data-drag="over"] {
-  border-color: var(--accent);
+.chart-brand-glyph {
+  width: 52px;
+  height: auto;
 }
 
-.add-more svg {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
+/* ---------- Engine status: the bottom-most, tiniest row ---------- */
 
-.add-more-hint {
-  color: var(--ink-soft);
-  font-weight: 400;
-}
-
-.privacy-proof {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s2);
-  margin: var(--s4) 0 0;
-  color: var(--ink-soft);
-  font-size: var(--t-sm);
-}
-
-.privacy-proof svg {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.7;
-  stroke-linejoin: round;
-}
-
-/* Engine status: one quiet line; a determinate bar while the runtime and networks download. */
 .engine-status {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s2) var(--s3);
-  min-height: 28px;
-  margin-top: var(--s2);
-  color: var(--ink-soft);
-  font-size: var(--t-sm);
+  justify-content: center;
+  gap: var(--s1) var(--s3);
+  min-height: 44px;
+  margin-top: var(--s5);
+  color: var(--ink-gray);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .engine-status-bar {
   position: relative;
-  flex: 0 1 160px;
-  height: 3px;
+  flex: 0 1 140px;
+  height: 2px;
   overflow: hidden;
-  background: var(--rule);
-  border-radius: 2px;
+  background: var(--ink-hairline);
 }
 
 .engine-status-fill {
   position: absolute;
   inset: 0 auto 0 0;
   width: 0%;
-  background: var(--accent);
-  transition: width var(--fast) linear;
+  background: var(--ink);
 }
 
 .engine-status[data-tone="ready"] .engine-status-bar,
@@ -303,100 +307,33 @@ main,
   display: none;
 }
 
-.engine-status[data-tone="error"] .engine-status-text {
-  color: var(--bad);
-}
-
-.engine-status[data-tone="ready"] {
-  opacity: 0.85;
-}
-
-/* Buttons. */
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s2);
-  min-height: 44px;
-  padding: 0 var(--s5);
-  border: 1.5px solid transparent;
-  border-radius: var(--radius-control);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color var(--fast) ease, border-color var(--fast) ease, color var(--fast) ease;
-}
-
-.button-primary {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.button-primary:hover {
-  background: color-mix(in srgb, var(--accent) 86%, var(--ink));
-}
-
-.button-primary:disabled {
-  background: var(--surface-sunken);
-  color: var(--ink-faint);
-  cursor: default;
-}
-
-.button-quiet {
-  background: transparent;
-  border-color: var(--rule);
+.engine-status[data-tone="error"] {
   color: var(--ink);
 }
 
-.button-quiet:hover {
-  border-color: var(--ink-soft);
+.chart[data-state="has-photos"] .engine-status {
+  justify-content: flex-start;
+  margin-top: 0;
 }
 
-/* Explainers and footer. */
-.explainer {
-  max-width: 68ch;
-  margin-top: var(--s9);
+/* With photos in, the status only speaks up while loading or on error. */
+.chart[data-state="has-photos"] .engine-status[data-tone="ready"] {
+  display: none;
 }
 
-.explainer h2 {
-  margin: 0 0 var(--s4);
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: var(--t-xl);
-}
-
-.steps,
-.facts {
-  margin: 0;
-  padding-left: 1.3em;
-  color: var(--ink-soft);
-}
-
-.steps li,
-.facts li {
-  margin-bottom: var(--s3);
-  padding-left: var(--s1);
-}
-
-.steps strong {
-  color: var(--ink);
-}
-
-.limit-note {
-  margin: var(--s5) 0 0;
-  color: var(--ink-soft);
-}
+/* ---------- Footer and drop overlay ---------- */
 
 .site-footer {
-  margin-top: var(--s9);
-  padding-block: var(--s6) var(--s8);
-  border-top: 1px solid var(--rule);
-  color: var(--ink-faint);
-  font-size: var(--t-sm);
+  width: min(100% - 2 * var(--s4), var(--chart-width));
+  margin: var(--s7) auto 0;
+  padding-bottom: var(--s6);
+  color: var(--ink-gray);
+  font-size: 12px;
+  text-align: center;
 }
 
-.site-footer a {
-  color: var(--ink-soft);
+.site-footer p {
+  margin: 0;
 }
 
 .drag-overlay {
@@ -405,38 +342,47 @@ main,
   z-index: 20;
   display: grid;
   place-items: center;
-  background: var(--scrim);
-  color: #ffffff;
-  font-size: var(--t-xl);
-  font-weight: 600;
+  padding: var(--s5);
+  background: var(--paper);
   pointer-events: none;
 }
 
-.drag-overlay[hidden] {
-  display: none;
+.drag-overlay p {
+  margin: 0;
+  font-family: var(--font-chart);
+  font-size: clamp(24px, 5vw, 48px);
+  letter-spacing: var(--chart-tracking);
+  text-align: center;
+  text-transform: uppercase;
 }
 
-@media (max-width: 560px) {
-  .site-nav {
-    gap: var(--s4);
+/* Narrow: brand on its own line, the two text actions together on the line below. */
+@media (max-width: 639px) {
+  .chart[data-state="has-photos"] .chart-header {
+    gap: 0 var(--s5);
   }
 
-  .intake {
-    padding-top: var(--s4);
+  .chart-brand {
+    flex-basis: 100%;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 479px) {
+  :root {
+    --acuity-gutter: 0px;
   }
 
-  .intake-lede {
-    font-size: var(--t-md);
-    margin-bottom: var(--s5);
-  }
-
-  .add-more-hint {
+  .acuity {
     display: none;
   }
 
-  /* The photo is the payload on a phone; the Privacy section below still says this in full. */
-  .intake[data-state="has-photos"] .privacy-proof {
-    display: none;
+  .chart-brand {
+    font-size: 18px;
+  }
+
+  .chart-brand-glyph {
+    width: 40px;
   }
 }
 

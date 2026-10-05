@@ -1,15 +1,14 @@
 /**
  * Before/after compare: two stacked canvases, the "after" clipped to the right of a divider
- * whose handle is a small lens. A transparent native range input covers the whole view, so
- * dragging anywhere, tapping, and the keyboard (arrows, Home/End) all work with no custom
- * pointer code, and screen readers get a real slider.
+ * (red edge on the before side, green on the after side, a plain bar for the handle). A
+ * transparent native range input covers the whole view, so dragging anywhere, tapping, and
+ * the keyboard (arrows, Home/End) all work with no custom pointer code, and screen readers
+ * get a real slider.
  *
- * The one motion moment of the page lives here: when a result first appears the divider
- * sweeps from fully "before" to the middle (skipped under prefers-reduced-motion).
+ * No motion here: the divider rests at the middle. The page's one fade (the after side
+ * appearing) is CSS keyed on `data-ready`, and prefers-reduced-motion switches it off.
  */
 
-const SWEEP_DURATION_MS = 700;
-const SWEEP_START_PERCENT = 100;
 const RESTING_PERCENT = 50;
 
 function drawSourceOnto(canvas, source, width, height) {
@@ -29,7 +28,6 @@ export class CompareView {
     this.afterCanvas = rootElement.querySelector(".compare-after");
     this.rangeInput = rootElement.querySelector(".compare-range");
     this.workingText = rootElement.querySelector(".compare-working-text");
-    this.hasSwept = false;
     this.rangeInput.addEventListener("input", () => this.applySplit(Number(this.rangeInput.value)));
   }
 
@@ -59,35 +57,16 @@ export class CompareView {
     this.setAspect(width, height);
     drawSourceOnto(this.beforeCanvas, beforeSource, width, height);
     drawSourceOnto(this.afterCanvas, afterSource, width, height);
-    this.rootElement.dataset.ready = "true";
-    if (!this.hasSwept) {
-      this.hasSwept = true;
-      this.sweepIn();
+    if (this.rootElement.dataset.ready !== "true") {
+      this.rangeInput.value = String(RESTING_PERCENT);
+      this.applySplit(RESTING_PERCENT);
     }
+    this.rootElement.dataset.ready = "true";
   }
 
   /** Redraw only the "after" side (strength or toggle changed). */
   updateAfter(afterSource) {
     drawSourceOnto(this.afterCanvas, afterSource, this.afterCanvas.width, this.afterCanvas.height);
-  }
-
-  sweepIn() {
-    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduceMotion) {
-      this.rangeInput.value = String(RESTING_PERCENT);
-      this.applySplit(RESTING_PERCENT);
-      return;
-    }
-    const startTime = performance.now();
-    const step = (now) => {
-      const progress = Math.min(1, (now - startTime) / SWEEP_DURATION_MS);
-      const eased = 1 - (1 - progress) ** 3;
-      const percent = SWEEP_START_PERCENT + (RESTING_PERCENT - SWEEP_START_PERCENT) * eased;
-      this.rangeInput.value = String(percent);
-      this.applySplit(percent);
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
   }
 
   /** Give canvas memory back (Safari keeps released canvases around otherwise). */

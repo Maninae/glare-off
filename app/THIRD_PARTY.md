@@ -9,6 +9,7 @@ Every file under `app/` that was not written for this project, with its license 
 | `vendor/onnxruntime-web-1.30.0/LICENSE` | onnxruntime license text (the npm tarball ships none) | MIT | `github.com/microsoft/onnxruntime/blob/v1.30.0/LICENSE` |
 | `models/face_detection_yunet_2023mar.onnx` | YuNet face detector (used by the Python side; not served to visitors) | MIT, Copyright (c) 2020 Shiqi Yu | OpenCV Zoo, `models/face_detection_yunet` (`huggingface.co/opencv/face_detection_yunet`) |
 | `models/face_detection_yunet_2023mar_dynamic_input.onnx` | The same YuNet with symbolic input height/width so onnxruntime accepts any photo size; weights and ops unchanged | MIT, Copyright (c) 2020 Shiqi Yu | derived from the file above by `tests/app/make_yunet_dynamic_input_model.py` |
+| `fonts/OpticianSans-Regular.woff2` | Optician Sans v1.002 by ANTI Hamar and Fábio Duarte Martins, the display face (eye-chart optotype letterforms) | SIL Open Font License 1.1 (`fonts/OpticianSans-OFL.txt`) | `github.com/anewtypeofinterference/Optician-Sans`, `Web-PS/Optician-Sans.woff2`, byte-for-byte (SHA-256 `e42c77bff89b9586b9c7b1ab2b8954e519a303f72f51af366e9b568184a35253`); license confirmed on `optician-sans.com` and the repo's `LICENSE.md` |
 
 `models/glare_removal.onnx` is this project's own network (see `models/README.md` for its training data and license).
 
