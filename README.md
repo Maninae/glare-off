@@ -23,7 +23,7 @@ Glare Off removes the reflections on eyeglass lenses in a photo. Drop in the pic
 
 ## Get it
 
-It is a web page: open it, drop a photo on it, press Download. The hosted address goes here the day the trained network ships. Until then, run it from your own machine:
+It is a web page: **[maninae.github.io/glare-off](https://maninae.github.io/glare-off/)**. Open it, drop a photo on it, press Download. To run it from your own machine instead:
 
 ```bash
 git clone https://github.com/Maninae/glare-off.git
