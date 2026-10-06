@@ -394,3 +394,6 @@ a {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* Work-in-progress row: the one row set in a box so it reads as a sign, not a chart line. Remove with the row in index.html once the trained model ships. */
+.wip-row .chart-text { display: inline-block; padding: 0.35em 0.7em; border: 2px solid var(--ink); }

@@ -1,5 +1,5 @@
 {
- "version": "e764f7bcd5bddb17",
+ "version": "08281a877cee7881",
  "assets": [
   {
    "path": "404.html",
@@ -58,7 +58,7 @@
   },
   {
    "path": "index.html",
-   "bytes": 9411,
+   "bytes": 9693,
    "precache": true
   },
   {
@@ -183,7 +183,7 @@
   },
   {
    "path": "styles/page.css",
-   "bytes": 8277,
+   "bytes": 8537,
    "precache": true
   },
   {
