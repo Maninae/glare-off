@@ -1,5 +1,5 @@
 {
- "version": "08281a877cee7881",
+ "version": "300d3290a55aad6e",
  "assets": [
   {
    "path": "404.html",
@@ -58,7 +58,7 @@
   },
   {
    "path": "index.html",
-   "bytes": 9693,
+   "bytes": 9713,
    "precache": true
   },
   {
@@ -178,7 +178,7 @@
   },
   {
    "path": "models/glare_removal.onnx",
-   "bytes": 11769733,
+   "bytes": 6000561,
    "precache": false
   },
   {
