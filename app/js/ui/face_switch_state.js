@@ -29,7 +29,7 @@ export function faceSwitchState(glassesDetected, overridden) {
 }
 
 /**
- * The tile's chart label lines (sentence case in the DOM; CSS sets them in capitals).
+ * The tile's label lines, in sentence case.
  * `face`: the face result (glareRun, hasGlare); `isBusy`: its on-demand glare run is in flight.
  */
 export function describeFaceTile(face, overridden, isBusy) {

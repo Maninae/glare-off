@@ -1,11 +1,12 @@
 /*
-  Results: a contact sheet. One photo per cell (two-up when the sheet is wide enough, one
-  full-width cell when there is one photo), each in a 2 px ink frame, with its controls set
-  below as small uppercase chart rows using plain native inputs.
+  Results: a sheet of white cards on the warm paper. One photo per card (two-up when the sheet
+  is wide enough), the photo inside a hairline rule over a matte that shows behind letterboxed
+  photos, its controls below in plain sentence-case sans.
 
-  The duochrome red/green appear here and nowhere else: the BEFORE/AFTER blocks (black
-  letters on red and green, as on a real chart's duochrome panel) and the two edges of the
-  compare divider.
+  - Before/After are small text labels (soft brick, accent green) on a near-white backing;
+    the divider is a white line, the handle a white lens-shaped bar with a thin charcoal ring.
+  - The accent marks only what the visitor changed or can act on: buttons, links, a face
+    they forced on. Most tiles stay charcoal.
 */
 
 .results {
@@ -16,11 +17,18 @@
 .result-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
-  gap: var(--s7) var(--s6);
+  gap: var(--s5);
   align-items: start;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.result {
+  padding: var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
 }
 
 .result-head {
@@ -38,28 +46,25 @@
   grid-area: name;
   margin: 0;
   overflow: hidden;
-  font-family: var(--font-chart);
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 1.3;
-  letter-spacing: var(--chart-tracking);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
   text-overflow: ellipsis;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
 .result-meta {
   grid-area: meta;
   margin: 0;
-  color: var(--ink-gray);
-  font-size: 12px;
+  color: var(--ink-muted);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 .result-download {
   grid-area: download;
-  margin-top: 0;
-  min-height: 46px;
+  min-height: 44px;
   font-size: 15px;
 }
 
@@ -70,9 +75,10 @@
   --compare-max-height: 74vh;
   position: relative;
   overflow: hidden;
-  /* Drawn outside the box, so the photo keeps its exact aspect inside the frame. */
-  outline: 2px solid var(--photo-frame);
-  background: var(--paper);
+  /* Drawn outside the box, so the photo keeps its exact aspect inside the rule. */
+  outline: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--matte);
   aspect-ratio: var(--photo-aspect, 4 / 3);
   width: min(100%, calc(var(--compare-max-height) * var(--photo-aspect-number, 1.333)));
   touch-action: pan-y;
@@ -114,28 +120,27 @@
 
 .compare-label {
   position: absolute;
-  top: 0;
-  padding: 5px 9px 5px calc(9px + var(--chart-tracking));
-  color: var(--on-duochrome);
-  font-family: var(--font-chart);
+  top: var(--s2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--label-backing);
   font-size: 12px;
-  line-height: 1;
-  letter-spacing: var(--chart-tracking);
-  text-transform: uppercase;
+  font-weight: 600;
+  line-height: 1.4;
   pointer-events: none;
 }
 
 .compare-label-before {
-  left: 0;
-  background: var(--duochrome-red);
+  left: var(--s2);
+  color: var(--label-before);
 }
 
 .compare-label-after {
-  right: 0;
-  background: var(--duochrome-green);
+  right: var(--s2);
+  color: var(--label-after);
 }
 
-/* The divider: a red edge on the before side, a green edge on the after side. */
+/* The divider: a white line with a faint charcoal edge, readable on any photo. */
 .compare-divider {
   position: absolute;
   top: 0;
@@ -143,20 +148,22 @@
   left: var(--split);
   width: 2px;
   margin-left: -1px;
-  background: linear-gradient(90deg, var(--duochrome-red) 50%, var(--duochrome-green) 50%);
+  background: var(--handle);
+  box-shadow: 0 0 0 0.5px rgb(25 28 27 / 0.35);
   pointer-events: none;
 }
 
-/* The handle: a plain white bar with a hairline black edge, readable on any photo. */
+/* The handle: a white lens-shaped bar with a thin charcoal ring. */
 .compare-handle {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 10px;
-  height: 52px;
-  margin: -26px 0 0 -5px;
-  background: #ffffff;
-  outline: 1px solid #000000;
+  width: 14px;
+  height: 48px;
+  margin: -24px 0 0 -7px;
+  border: 1.5px solid var(--handle-ring);
+  border-radius: 7px;
+  background: var(--handle);
 }
 
 .compare-range {
@@ -170,13 +177,13 @@
 }
 
 .compare:has(.compare-range:focus-visible) .compare-handle {
-  outline: 2px solid #000000;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 .compare-working {
   position: absolute;
-  inset: auto 0 0 0;
+  inset: auto 0 var(--s3) 0;
   display: flex;
   justify-content: center;
   margin: 0;
@@ -184,39 +191,33 @@
 }
 
 .compare-working-text {
-  padding: 7px 12px 7px calc(12px + var(--chart-tracking));
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-chart);
-  font-size: 13px;
-  letter-spacing: var(--chart-tracking);
-  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 14px;
 }
 
 .compare[data-ready="true"] .compare-working {
   display: none;
 }
 
-/* ---------- Status messages and controls: small uppercase chart rows ---------- */
+/* ---------- Status messages and controls: plain sentence-case sans ---------- */
 
 .result-message,
 .face-note {
   margin: var(--s4) 0 0;
-  font-family: var(--font-chart);
-  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-size: 14.5px;
   line-height: 1.55;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .result-controls {
   display: grid;
-  gap: var(--s2);
-  margin-top: var(--s4);
-  font-family: var(--font-chart);
-  font-size: 13px;
-  letter-spacing: var(--chart-tracking);
-  text-transform: uppercase;
+  gap: var(--s1);
+  margin-top: var(--s3);
+  color: var(--ink);
+  font-size: 15px;
 }
 
 .view-picker {
@@ -233,7 +234,7 @@
   float: left;
   margin-right: var(--s5);
   padding: 0;
-  color: var(--ink-gray);
+  color: var(--ink-muted);
 }
 
 .view-options {
@@ -254,7 +255,7 @@
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: var(--ink);
+  accent-color: var(--accent);
 }
 
 .strength {
@@ -268,16 +269,13 @@
 .strength-label {
   display: inline-flex;
   gap: var(--s2);
-  min-width: 13ch;
-  color: var(--ink-gray);
+  min-width: 10ch;
+  color: var(--ink-muted);
 }
 
 .strength-value {
   color: var(--ink);
-  font-family: var(--font-plain);
-  font-size: 13px;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
 }
 
 input[type="range"].strength-range {
@@ -285,10 +283,10 @@ input[type="range"].strength-range {
   max-width: 360px;
   min-height: 44px;
   margin: 0;
-  accent-color: var(--ink);
+  accent-color: var(--accent);
 }
 
-/* ---------- Face picker: one tile per face, its eye crop in an ink frame over a chart label ---------- */
+/* ---------- Face picker: one tile per face, its eye crop in a thin charcoal frame over a label ---------- */
 
 .face-picker {
   margin-top: var(--s4);
@@ -297,7 +295,7 @@ input[type="range"].strength-range {
 .face-tiles {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s4) var(--s4);
+  gap: var(--s4) var(--s5);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -306,26 +304,28 @@ input[type="range"].strength-range {
 .face-tile {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  width: calc(var(--face-crop-width) + 4px);
+  gap: 2px;
+  width: calc(var(--face-crop-width) + 2px);
   min-height: 44px;
-  padding: 2px 2px 4px;
+  padding: 1px 1px 4px;
   background: none;
   border: 0;
+  border-radius: 3px;
   color: var(--ink);
-  font-family: var(--font-chart);
-  font-size: 11px;
+  font-family: var(--font-plain);
+  font-size: 13px;
   line-height: 1.35;
-  letter-spacing: var(--chart-tracking);
   text-align: left;
-  text-transform: uppercase;
   cursor: pointer;
-  --face-crop-width: 96px;
+  --face-crop-width: 112px;
 }
 
 .face-tile-frame {
   display: block;
-  outline: 2px solid var(--photo-frame);
+  border-radius: 3px;
+  margin-bottom: 4px;
+  outline: 1px solid var(--tile-frame);
+  overflow: hidden;
 }
 
 .face-tile-crop {
@@ -335,7 +335,7 @@ input[type="range"].strength-range {
 }
 
 .face-tile-name {
-  color: var(--ink-gray);
+  color: var(--ink-muted);
 }
 
 .face-tile:hover .face-tile-label {
@@ -343,13 +343,23 @@ input[type="range"].strength-range {
   text-underline-offset: 3px;
 }
 
-/* Switched off: the face stays as it was, so its crop and label step back to gray. */
+/* Switched off: the face stays as it was, so its crop and label step back; the frame stays. */
 .face-tile[data-switched-on="false"] .face-tile-crop {
   opacity: 0.4;
 }
 
 .face-tile[data-switched-on="false"] .face-tile-label {
-  color: var(--ink-gray);
+  color: var(--ink-muted);
+}
+
+/* Forced on: the one tile state the visitor chose, marked in the accent. */
+.face-tile[data-state="user-on"] .face-tile-frame {
+  outline: 2px solid var(--accent);
+}
+
+.face-tile[data-state="user-on"] .face-tile-label {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .face-tile:disabled {
@@ -365,6 +375,10 @@ input[type="range"].strength-range {
 }
 
 @media (max-width: 479px) {
+  .result {
+    padding: var(--s4);
+  }
+
   .result-head {
     grid-template-areas:
       "name name"

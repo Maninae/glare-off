@@ -45,17 +45,17 @@ flowchart LR
 | `js/photo/zip_store.js` | STORE-only ZIP writer with CRC-32 for "Download all". |
 | `js/ui/input_doors.js` | File picker, whole-page drag-and-drop, paste. |
 | `js/ui/engine_status.js` | The status line: real-MB download progress, ready, error with Try again. |
-| `js/ui/compare_view.js` | Before/after canvases, the red/green divider with its plain handle, the transparent range input that drives it. No animation (the one fade is CSS). |
+| `js/ui/compare_view.js` | Before/after canvases, the divider with its handle, the transparent range input that drives it. No animation (the one fade is CSS). |
 | `js/ui/result_card.js` | One photo: states, owns each face's override, face picker, view picker (whole photo / eyes up close), strength, lost-detail notes, Download. Redraws are async (they may wait for a region re-read). |
-| `js/ui/face_picker.js` | The tile row under the compare view: one `<button aria-pressed>` per face with its eye crop and a chart label. Draws only. |
+| `js/ui/face_picker.js` | The tile row under the compare view: one `<button aria-pressed>` per face with its eye crop and a state label. Draws only. |
 | `js/ui/face_switch_state.js` | The per-face state machine and tile labels (pure; tested in Node). |
 | `sw.js` | Service worker: shell precache, runtime caching of models and ORT, COOP/COEP/CORP headers on everything it serves. |
 | `asset_manifest.json` | Generated list of every served file with sizes; feeds the SW precache, the cache version and the progress bar. |
-| `styles/tokens.css`, `page.css`, `results.css` | Tokens (the only color values, light and dark, and the `@font-face`), the eye chart and its collapsed header row, the contact sheet. |
-| `fonts/` | Optician Sans (OFL 1.1) woff2 and its license text. Self-hosted; see `THIRD_PARTY.md`. |
+| `styles/tokens.css`, `page.css`, `results.css` | Tokens (the only color values, light and dark), the welcome column and its collapsed header row, the result cards. |
+| `fonts/` | Optician Sans (OFL 1.1) woff2 and its license text, from the earlier eye-chart design; no longer referenced by the CSS. See `THIRD_PARTY.md`. |
 | `models/` | `face_detection_yunet_2023mar_dynamic_input.onnx` (served), the stock YuNet (Python only, not served), `glare_removal.onnx` (owned by `glare_model/`; see its README), `glasses_classifier.onnx` (owned by `glasses_classifier/`; input `eye_crop` [1,3,256,512], output `glasses_probability` [1,1]). |
 | `vendor/onnxruntime-web-1.30.0/` | Two ORT builds, verbatim from the npm tarball. See `THIRD_PARTY.md`. |
-| `icons/`, `manifest.webmanifest`, `404.html` | Favicon set rendered from `icons/favicon.svg` (black tile, white chart glasses), install manifest, link preview card (a crop of the chart's top rows). |
+| `icons/`, `manifest.webmanifest`, `404.html` | Favicon set rendered from `icons/favicon.svg` (black tile, white glasses), install manifest, link preview card (a screenshot of the empty state). |
 
 ## The glasses gate and the face picker
 
@@ -63,10 +63,10 @@ Every detected face is cropped once; the classifier and the glare model get the 
 
 | State | Glasses detected | Overridden | Glare model | In the blend and download |
 |---|---|---|---|---|
-| `auto-on` | yes | no | ran at processing | yes (label GLARE REMOVED, or NO GLARE FOUND if its mask was empty) |
-| `auto-off` | no | no | never ran | no, pixels untouched (NO GLASSES, SKIPPED) |
-| `user-on` | no | yes | runs on demand from the kept crop (`run-face`), label WORKING meanwhile | yes (FORCED ON) |
-| `user-off` | yes | yes | ran | no (FORCED OFF) |
+| `auto-on` | yes | no | ran at processing | yes (label "Glare removed", or "No glare found" if its mask was empty) |
+| `auto-off` | no | no | never ran | no, pixels untouched ("No glasses, skipped") |
+| `user-on` | no | yes | runs on demand from the kept crop (`run-face`), label "Working" meanwhile | yes ("Forced on") |
+| `user-off` | yes | yes | ran | no ("Forced off") |
 
 - A second press returns to the automatic state. A face is blended only when switched on AND its glare mask is non-empty; `currentExportSettings()` sends exactly those faces, so the download follows the picker.
 - Card states: `done` (some face has glare), `no-glare` (faces checked, none had glare), `no-glasses` (every face skipped; Download disabled until a forced face finds glare), `no-face`.
@@ -116,23 +116,25 @@ Engine start: ~0.5-1 s on WASM, ~1-2.3 s on WebGPU (shader compile), once per vi
 
 The glare model dominates the gzip total; the fp16 export (`glare_removal_fp16.onnx`, about half) is the next lever.
 
-## Design: the eye chart
+## Design: the waiting room
 
-The page IS a Snellen chart: everyone who wears glasses has stood in front of one. Owner's rule: commit to it; do not drift back toward cards, pills, serif headlines or a soft accent.
+The page should feel like the README banner (`assets/banner-light.png`): an optician's waiting room with good light, warm and quiet. Owner's verdict on the earlier eye-chart look (pure black on white, Optician Sans in tracked capitals): it did not feel calm or pleasant. Do not drift back to it: no pure `#fff`/`#000` grounds, no letterspaced uppercase, no shrinking stack of tiny rows, no boxed sign rows.
 
-- **Canvas:** white `#ffffff`, ink `#111`; dark mode is the chart inverted (`#000` ground, `#f4f4f4` ink) via `prefers-color-scheme`, no toggle. One centered column (`--chart-width` 820 px); the contact sheet widens to `--sheet-width` 1240 px.
-- **Rows shrink as you read down**, each a 3-column grid `[gutter | centered text | acuity label]`: the glasses glyph (row 1, the "big E"), the headline, DROP A PHOTO ANYWHERE ON THIS PAGE with the CHOOSE PHOTOS block, the two promise rows, then one fact per row down to 20/10. Row sizes use container units so each row keeps its line count; one line per row on desktop. Acuity labels (20/200 ... 20/10) are the one wink: small gray system sans, `aria-hidden`, hidden below 480 px. The engine status is the bottom-most tiny gray row.
-- **Type:** Optician Sans (built from eye-chart optotypes), uppercase via CSS, tracked `0.12em`, for every chart row and control label. System sans, small, gray, sentence case only for acuity labels, sublabels, status, file meta, and numbers. The glyph's stroke is a fifth of the lens height, matching the letters.
-- **Color:** black and white only. The duochrome red `#e8380d` / green `#0f9d58` (black letters on them, as on a chart's duochrome panel) appear in exactly one place: the BEFORE/AFTER blocks and the divider's two edges. Errors and notes are plain ink. Focus: 2 px ink outline.
-- **Forbidden:** borders on containers, radii, shadows, gradients, pills, icons other than the glasses glyph, custom-drawn toggles. The one solid control is a black rectangle with white chart letters (CHOOSE PHOTOS, DOWNLOAD); secondary actions are underlined chart text (ADD PHOTOS, DOWNLOAD ALL, TRY AGAIN).
-- **Results:** the chart collapses to a header row (glyph, GLARE OFF, ADD PHOTOS, DOWNLOAD ALL); photos form a contact sheet (two-up when wide, `auto-fit`), each in a 2 px ink frame drawn with `outline` so the photo keeps its exact aspect. Controls are small uppercase chart rows with native radios and range (`accent-color: ink`). Under each compare view, the face picker: 96 px eye-crop tiles in a 2 px ink `outline`, a chart label below; a switched-off face fades its crop to 40% and its label to gray. No color, no radius.
-- **Motion:** none except the divider following the pointer and a 320 ms fade of the cleaned side when a result lands (off under reduced motion).
-- **Whole page is the drop target** (window listeners in `input_doors.js`); row 3 (`#drop-zone`) also opens the picker on click; paste works anywhere.
-- Accessibility: the compare is a real `<input type=range>`; chart text stays sentence case in the DOM (screen readers do not spell out capitals); text contrast >= 4.5:1 (gray `#767676` / `#8c8c8c`, black on red 5.0:1, on green 6.0:1); tap targets >= 44 px.
+- **Palette** (`styles/tokens.css`, the only color values): paper `#f5f4ef`, white surfaces, headline ink `#191c1b`, body `#3d423f`, secondary `#565c59`, muted `#676d69`, rules `#d8d8cf`, matte `#e2e1d9` behind letterboxed photos, one accent green `#17654f`. Dark mode is designed separately: `#121514` / `#1b1f1d`, text `#e9ece9`, accent `#6cc9a9` (the accent button takes dark text there). Never pure black.
+- **Type:** the headline, the brand and the drop overlay in the banner's serif stack (`ui-serif, "New York", "Iowan Old Style", Charter, Georgia, serif`), regular weight, sentence case. Everything else in the system sans, normal tracking, sentence case. Optician Sans is no longer used (its files and `THIRD_PARTY.md` entry stay).
+- **Empty state, in reading order:** the glasses glyph, the serif headline, the drop card (row 3, `#drop-zone`: the one white surface with a hairline rule; its border turns green on hover and drag), two promise lines (privacy in the accent, "Free..." in secondary), the version note as one muted line (may run past the column on wide screens), then the facts as a short left-aligned list at 15.5 px with hairline separators. The `chart-*` class names and the `aria-hidden` acuity labels stay in the DOM for scripts and tests; CSS hides the labels.
+- **Controls:** Choose photos and Download are accent buttons with white text and a 7 px radius; secondary actions (Add photos, Download all, Try again) are accent text links. Radios and range use `accent-color`. Focus: 2 px accent outline.
+- **Results:** the column collapses to a header row (glyph, serif "Glare Off", the two links); each photo is a white card with a hairline rule and 12 px radius. The compare view has a 1 px rule (`outline`, so the photo keeps its exact aspect) over the matte. Before/After are small text labels (brick `#9c4535`, accent green) on a near-white backing; the divider is a white line; the handle a white rounded bar with a thin charcoal ring.
+- **Face picker:** 112 px eye-crop tiles in a thin charcoal frame, sentence-case labels ("Glare removed", "No glasses, skipped"). Switched off: crop at 40%, label muted, frame intact. Forced on (`data-state="user-on"`): green frame and green label; that is the only tile state in the accent.
+- **Accent budget:** green marks only what the visitor can act on or chose (buttons, links, a forced face, the privacy promise). Most of the page is charcoal on paper.
+- **Motion:** the divider following the pointer, a 320 ms fade of the cleaned side when a result lands, 160 ms hover transitions; all off under reduced motion.
+- **Whole page is the drop target** (window listeners in `input_doors.js`); the drop card also opens the picker on click; paste works anywhere.
+- **Accessibility:** contrast on paper: headline 15.6:1, body 9.3:1, secondary 6.2:1, muted 4.8:1, accent text 6.3:1; white on the accent button 7.0:1; Before label on white 6.3:1. Dark: muted 6.1:1 on the surface, accent 8.4:1. A disabled button is muted text on paper (4.8:1). Labels are sentence case in the DOM and on screen; tap targets >= 44 px.
+- `icons/preview.png` is a 1200x630 screenshot of the empty state (light).
 
 ## Empty state and the sample slot
 
-There are no demo photos yet (licensing). `#sample-slot` in chart row 3 is hidden and empty; to add "Try a sample", put CC-licensed or consented images under `samples/`, list them with attribution in `THIRD_PARTY.md`, render a button into the slot that feeds the file through `addPhotos([file])` in `main.js`, and re-run the manifest sync.
+There are no demo photos yet (licensing). `#sample-slot` in the drop card (row 3) is hidden and empty; to add "Try a sample", put CC-licensed or consented images under `samples/`, list them with attribution in `THIRD_PARTY.md`, render a button into the slot that feeds the file through `addPhotos([file])` in `main.js`, and re-run the manifest sync.
 
 ## Run locally
 

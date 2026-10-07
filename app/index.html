@@ -20,8 +20,8 @@
 <meta name="referrer" content="no-referrer">
 <title>Glare Off: remove glare from glasses in photos, privately</title>
 <meta name="description" content="Remove reflections and glare from eyeglass lenses in your photos. Free and open source. Runs entirely in your browser; your photo is never uploaded.">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121514" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -31,7 +31,6 @@
 <meta property="og:description" content="Remove glare from glasses in photos. Free, open source, and nothing is uploaded.">
 <meta property="og:image" content="icons/preview.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preload" href="fonts/OpticianSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/page.css">
 <link rel="stylesheet" href="styles/results.css">
@@ -42,9 +41,10 @@
 
 <main id="main">
   <!--
-    The page is an eye chart: rows shrink as you read down, each with its acuity label at the
-    right margin (decorative, aria-hidden). With photos in (data-state="has-photos") the chart
-    collapses to the header row and the results become the payload. See app/CLAUDE.md, "Design".
+    The welcome column: glyph, headline, the drop card, promises, then the facts. The "chart-*"
+    class names and the aria-hidden acuity labels are kept for the scripts and tests; CSS hides
+    the labels. With photos in (data-state="has-photos") the column collapses to the header row
+    and the results become the payload. See app/CLAUDE.md, "Design".
   -->
   <section class="chart" id="intake" data-state="empty" aria-labelledby="intake-heading">
     <div class="chart-header">
@@ -110,13 +110,13 @@
 </main>
 
 <footer class="site-footer">
-  <p>Open source (MIT). Set in Optician Sans. Uses onnxruntime-web and the YuNet face detector: <a href="THIRD_PARTY.md">third-party licenses</a>.</p>
+  <p>Open source (MIT). Uses onnxruntime-web and the YuNet face detector: <a href="THIRD_PARTY.md">third-party licenses</a>.</p>
 </footer>
 
 <div class="drag-overlay" id="drag-overlay" hidden><p>Let go to take the glare off</p></div>
 
 <svg width="0" height="0" class="svg-defs" aria-hidden="true">
-  <!-- Stroke weight is a fifth of the lens height, like the strokes of an eye-chart letter. -->
+  <!-- The glasses glyph: stroke weight is a fifth of the lens height. -->
   <symbol id="glasses-glyph" viewBox="0 0 64 28"><g fill="none" stroke="currentColor" stroke-width="3.4" stroke-linejoin="round"><rect x="3" y="6" width="23" height="17" rx="6"></rect><rect x="38" y="6" width="23" height="17" rx="6"></rect><path d="M26 12.5c4-3.2 8-3.2 12 0"></path></g></symbol>
 </svg>
 

@@ -1,5 +1,5 @@
 {
- "version": "918ed9ce644fcade",
+ "version": "2036fc005b254fed",
  "assets": [
   {
    "path": "404.html",
@@ -53,12 +53,12 @@
   },
   {
    "path": "icons/preview.png",
-   "bytes": 29108,
+   "bytes": 51595,
    "precache": false
   },
   {
    "path": "index.html",
-   "bytes": 9949,
+   "bytes": 9875,
    "precache": true
   },
   {
@@ -173,12 +173,12 @@
   },
   {
    "path": "js/ui/face_picker.js",
-   "bytes": 3892,
+   "bytes": 3886,
    "precache": true
   },
   {
    "path": "js/ui/face_switch_state.js",
-   "bytes": 1991,
+   "bytes": 1949,
    "precache": true
   },
   {
@@ -213,17 +213,17 @@
   },
   {
    "path": "styles/page.css",
-   "bytes": 8537,
+   "bytes": 8324,
    "precache": true
   },
   {
    "path": "styles/results.css",
-   "bytes": 7639,
+   "bytes": 7775,
    "precache": true
   },
   {
    "path": "styles/tokens.css",
-   "bytes": 1592,
+   "bytes": 2171,
    "precache": true
   },
   {

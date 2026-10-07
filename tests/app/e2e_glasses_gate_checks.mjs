@@ -111,14 +111,14 @@ export async function checkForcedFaceOnDemand({ browser, baseUrl, appOrigin, pho
   await page.waitForTimeout(400);
   await screenshot(card, "desktop-light-face-forced-on");
   const forcedTileLabel = await forcedTile.locator(".face-tile-label").innerText();
-  check("force on: the tile reads FORCED ON", /^FORCED ON/.test(forcedTileLabel), forcedTileLabel.replace(/\n/g, " / "));
+  check("force on: the tile reads Forced on", /^forced on/i.test(forcedTileLabel), forcedTileLabel.replace(/\n/g, " / "));
   if (forcedFace.hasGlare) {
     check("force on: the card turns into a before/after result with Download enabled", forcedJob.state === "done" && !(await card.locator(".result-download").isDisabled()));
     const forcedPath = await downloadCard(page, 0, downloadDirectory);
     const exactness = await checkBitExactness(page, 0, photoPath, forcedPath);
     check("force on: the download changes the forced face's masked pixels and nothing else (the other face stays skipped)", exactness.changedInsideMask > 0 && exactness.changedOutsideMask === 0 && exactness.changedInSkippedFaceArea === 0 && exactness.skippedFaceAreaPixels > 0, JSON.stringify(exactness));
   } else {
-    check("force on: no glare found, the card says so and stays unchanged", forcedJob.state === "no-glare" && /NO GLARE FOUND/.test(forcedTileLabel));
+    check("force on: no glare found, the card says so and stays unchanged", forcedJob.state === "no-glare" && /no glare found/i.test(forcedTileLabel));
   }
   const requestsAfterReady = requests.slice(requestCountAtReady).filter((request) => isNetworkUrl(request.url));
   const foreignRequests = requests.filter((request) => isNetworkUrl(request.url) && new URL(request.url).origin !== appOrigin);

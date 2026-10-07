@@ -1,34 +1,38 @@
 /*
-  Design tokens: the only place a color value appears. The page is an eye chart
-  (app/CLAUDE.md, "Design"): black ink on white, inverted in dark mode, and the duochrome
-  red/green pair from the bottom of a real chart, used for ONE thing only: the BEFORE/AFTER
-  labels and the two edges of the compare divider. No other accent anywhere.
+  Design tokens: the only place a color value appears. The look follows the README banner
+  (app/CLAUDE.md, "Design"): warm paper, white surfaces, soft charcoal text, one quiet green.
+
+  - Contrast on --paper (light): headline 15.6:1, body 9.3:1, secondary 6.2:1, muted 4.8:1,
+    accent text 6.3:1, white on the accent button 7.0:1, before label on white 6.3:1.
+  - Dark mode is designed separately (warm charcoal, never pure black); the accent button
+    carries dark text there because white on the light green would fail.
 */
-@font-face {
-  font-family: "Optician Sans";
-  src: url("../fonts/OpticianSans-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
 
 :root {
   color-scheme: light dark;
-  --paper: #ffffff;
-  --ink: #111111;
-  --ink-gray: #767676; /* 4.5:1 on white: acuity labels, sublabels, status */
-  --ink-hairline: #d4d4d4; /* the empty part of the progress bar only */
-  /* Duochrome blocks carry black letters; red nudged from #d81e05 so black reaches 5:1. */
-  --duochrome-red: #e8380d;
-  --duochrome-green: #0f9d58;
-  --on-duochrome: #000000;
-  --photo-frame: var(--ink);
+  --paper: #f5f4ef;
+  --surface: #ffffff;
+  --ink-strong: #191c1b; /* the headline and the brand only */
+  --ink: #3d423f; /* body text, control labels, tile frames */
+  --ink-soft: #565c59; /* secondary text */
+  --ink-muted: #676d69; /* quietest text: status, meta, footer (4.8:1 on paper) */
+  --rule: #d8d8cf; /* hairlines */
+  --matte: #e2e1d9; /* behind letterboxed photos */
+  --accent: #17654f;
+  --accent-soft: #d9ebe3;
+  --on-accent: #ffffff;
+  --label-before: #9c4535; /* soft brick, text only */
+  --label-after: var(--accent);
+  --label-backing: rgb(255 255 255 / 0.9);
+  --handle: #ffffff;
+  --handle-ring: #3d423f;
+  --tile-frame: #3d423f; /* thin charcoal around each face crop */
 
-  --font-chart: "Optician Sans", "Arial Black", Arial, sans-serif;
+  --font-serif: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, serif;
   --font-plain: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 
-  /* Chart letters are tracked wide, like optotypes spaced one letter-width apart. */
-  --chart-tracking: 0.12em;
+  --radius-control: 7px;
+  --radius-surface: 12px;
 
   --s1: 4px;
   --s2: 8px;
@@ -39,16 +43,27 @@
   --s7: 48px;
   --s8: 72px;
 
-  --chart-width: 820px;
+  --page-width: 720px;
   --sheet-width: 1240px;
-  --acuity-gutter: 4.75rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #000000;
-    --ink: #f4f4f4;
-    --ink-gray: #8c8c8c;
-    --ink-hairline: #333333;
+    --paper: #121514;
+    --surface: #1b1f1d;
+    --ink-strong: #f2f4f2;
+    --ink: #e9ece9;
+    --ink-soft: #b3b9b5;
+    --ink-muted: #979e9a; /* 6.1:1 on the surface */
+    --rule: #2f3532;
+    --matte: #252a28;
+    --accent: #6cc9a9;
+    --accent-soft: #1f3a31;
+    --on-accent: #121514;
+    --label-before: #e39a8a;
+    --label-backing: rgb(27 31 29 / 0.88);
+    --handle: #f2f4f2;
+    --handle-ring: #121514;
+    --tile-frame: #8f9692;
   }
 }

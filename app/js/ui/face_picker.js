@@ -1,6 +1,6 @@
 /**
  * The face picker under a photo's compare view: one tile per detected face, showing that
- * face's eye crop (a thumbnail the worker made) and its state as a small chart label.
+ * face's eye crop (a thumbnail the worker made) and its state as a small label.
  *
  * - Each tile is a real <button> with aria-pressed (pressed = glare removal switched on for
  *   that face) and an aria-label ("Face 2: glare removed, press to leave this face as it was").
