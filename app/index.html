@@ -33,6 +33,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/page.css">
+<link rel="stylesheet" href="styles/explainer.css">
 <link rel="stylesheet" href="styles/results.css">
 <script type="module" src="js/main.js"></script>
 </head>
@@ -41,7 +42,7 @@
 
 <main id="main">
   <!--
-    The welcome column: glyph, headline, the drop card, promises, then the facts. The "chart-*"
+    The welcome column: glyph, headline, the drop card, promises, then the explainer drawings and the version note. The "chart-*"
     class names and the aria-hidden acuity labels are kept for the scripts and tests; CSS hides
     the labels. With photos in (data-state="has-photos") the column collapses to the header row
     and the results become the payload. See app/CLAUDE.md, "Design".
@@ -81,28 +82,53 @@
         <p class="chart-text">Free. No account. No limits.</p>
         <span class="acuity" aria-hidden="true">20/40</span>
       </div>
+      <!--
+        The explainer: a three-step drawing of the pipeline, then the privacy icons. Drawings are
+        inline SVG in the glasses glyph's stroke language; green marks only what the tool marks.
+      -->
+      <div class="explainer">
+        <section class="how" aria-labelledby="facts-how">
+          <h2 class="explainer-heading" id="facts-how">How it works</h2>
+          <ol class="steps">
+            <li class="step">
+              <svg class="step-drawing" viewBox="0 0 120 100" role="img" aria-labelledby="step-find-title"><title id="step-find-title">Find each pair of eyes</title><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M60 10c-16 0-27 13-27 32s11 37 27 37 27-18 27-37-11-32-27-32z"/><path d="M53 64q7 4 14 0"/><path d="M51 78v7M69 78v7M51 85c-14 2-24 6-28 13M69 85c14 2 24 6 28 13"/></g><g fill="currentColor"><circle cx="49" cy="43" r="2.8"/><circle cx="71" cy="43" r="2.8"/></g><rect class="mark" x="37" y="34" width="46" height="18" rx="4" fill="none" stroke-width="2"/></svg>
+              <p class="step-caption">Find each pair of eyes</p>
+            </li>
+            <li class="step">
+              <svg class="step-arrow" viewBox="0 0 40 12" aria-hidden="true"><path d="M3 6h28M29 2l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <svg class="step-drawing" viewBox="0 0 120 100" role="img" aria-labelledby="step-clean-title"><title id="step-clean-title">Clear the glare, mark where it was</title><rect class="faint" x="6" y="27" width="108" height="46" rx="5" fill="none" stroke-width="1.6" stroke-dasharray="1 4" stroke-linecap="round"/><path class="faint" d="M22 61l17-17M30 63l15-15" fill="none" stroke-width="3.2" stroke-linecap="round"/><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="37" width="39" height="27" rx="9"/><rect x="66" y="37" width="39" height="27" rx="9"/><path d="M54 45c4-3 8-3 12 0"/></g><circle cx="85.5" cy="50.5" r="2.8" fill="currentColor"/><ellipse class="mark" cx="34" cy="53" rx="15" ry="7.5" transform="rotate(-45 34 53)" fill="none" stroke-width="2"/></svg>
+              <p class="step-caption">Clear the glare, mark where it was</p>
+            </li>
+            <li class="step">
+              <svg class="step-arrow" viewBox="0 0 40 12" aria-hidden="true"><path d="M3 6h28M29 2l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <svg class="step-drawing" viewBox="0 0 120 100" role="img" aria-labelledby="step-blend-title"><title id="step-blend-title">Only the marked pixels change</title><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M60 10c-16 0-27 13-27 32s11 37 27 37 27-18 27-37-11-32-27-32z"/><path d="M53 64q7 4 14 0"/><path d="M51 78v7M69 78v7M51 85c-14 2-24 6-28 13M69 85c14 2 24 6 28 13"/><rect x="37" y="35" width="20" height="15" rx="5"/><rect x="63" y="35" width="20" height="15" rx="5"/><path d="M57 40c2-1.5 4-1.5 6 0"/></g><g fill="currentColor"><circle cx="47" cy="42.5" r="2.8"/><circle cx="73" cy="42.5" r="2.8"/></g><path class="mark" d="M94 22l5 5 10-11" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <p class="step-caption">Only the marked pixels change</p>
+              <p class="step-footnote">Where glare whited out an eye, it is filled in, and you are told.</p>
+            </li>
+          </ol>
+        </section>
+        <section class="private" aria-labelledby="facts-private">
+          <h2 class="explainer-heading" id="facts-private">Private by design</h2>
+          <ul class="promises">
+            <li class="promise">
+              <svg class="promise-icon" viewBox="0 0 40 40" role="img" aria-labelledby="promise-device-title"><title id="promise-device-title">Nothing leaves this device</title><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 25v6h22v-6M20 24V8M14 14l6-6 6 6"/><path class="slash-gap" d="M8 7l25 26"/><path d="M8 7l25 26"/></g></svg>
+              <span class="promise-caption">Nothing leaves this device</span>
+            </li>
+            <li class="promise">
+              <svg class="promise-icon" viewBox="0 0 40 40" role="img" aria-labelledby="promise-metadata-title"><title id="promise-metadata-title">Downloads drop location, camera and date</title><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 34s-10-9-10-17a10 10 0 0 1 20 0c0 8-10 17-10 17z"/><circle cx="20" cy="17" r="3.5"/><path class="slash-gap" d="M8 7l25 26"/><path d="M8 7l25 26"/></g></svg>
+              <span class="promise-caption">Downloads drop location, camera, date</span>
+            </li>
+            <li class="promise">
+              <svg class="promise-icon" viewBox="0 0 40 40" role="img" aria-labelledby="promise-tracking-title"><title id="promise-tracking-title">No account, analytics, ads or cookies</title><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M31 21a11 11 0 1 1-11-12 4 4 0 0 0 5 5 4 4 0 0 0 6 7z"/></g><g fill="currentColor"><circle cx="15" cy="19" r="1.6"/><circle cx="22" cy="26" r="1.6"/><circle cx="14" cy="27" r="1.6"/></g><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path class="slash-gap" d="M8 7l25 26"/><path d="M8 7l25 26"/></g></svg>
+              <span class="promise-caption">No account, analytics, ads or cookies</span>
+            </li>
+          </ul>
+          <p class="promise-small-print">Once loaded, it makes no network requests. Other sites are blocked.</p>
+        </section>
+      </div>
       <div class="chart-row chart-row-5 wip-row" id="wip-row" role="status">
         <p class="chart-text">Early version: best on white light, windows and haze. Colored screen reflections mostly stay. Next model is training.</p>
         <span class="acuity" aria-hidden="true">v0.1</span>
-      </div>
-      <div class="facts">
-        <section class="fact-group" aria-labelledby="facts-how">
-          <h2 class="fact-heading" id="facts-how">How it works</h2>
-          <ol class="fact-list fact-steps">
-            <li class="chart-row"><span class="fact-lead">Find.</span> <span class="chart-text">A small face finder locates each pair of eyes.</span></li>
-            <li class="chart-row"><span class="fact-lead">Clean.</span> <span class="chart-text">A network clears the strip around the glasses and marks where the glare was.</span></li>
-            <li class="chart-row"><span class="fact-lead">Blend.</span> <span class="chart-text">Only the marked pixels change. Every other pixel stays exactly as it was.</span></li>
-            <li class="chart-row"><span class="fact-lead">Honest.</span> <span class="chart-text">Where glare turned an eye pure white, it is filled in, and you are told.</span></li>
-          </ol>
-        </section>
-        <section class="fact-group" aria-labelledby="facts-private">
-          <h2 class="fact-heading" id="facts-private">Private by design</h2>
-          <ul class="fact-list">
-            <li class="chart-row"><span class="fact-lead">Offline.</span> <span class="chart-text">Once loaded, it makes no network requests. Other sites are blocked.</span></li>
-            <li class="chart-row"><span class="fact-lead">Stripped.</span> <span class="chart-text">Downloads drop location, camera and date.</span></li>
-            <li class="chart-row"><span class="fact-lead">Quiet.</span> <span class="chart-text">No analytics, no ads, no cookies, no account.</span></li>
-          </ul>
-        </section>
       </div>
     </div>
 

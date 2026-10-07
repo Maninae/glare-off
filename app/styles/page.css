@@ -5,7 +5,7 @@
   - The class names still say "chart" (the DOM and the e2e depend on them); the look is the
     README banner: warm paper, a serif headline, system sans for everything else, sentence case.
   - Reading order: glasses glyph, headline, the drop card (the one white surface and the one
-    green button), two promise lines, the version note, then a short airy list of facts.
+    green button), two promise lines, the explainer drawings (styles/explainer.css), the version note.
   - The acuity labels stay in the DOM (aria-hidden) but are not shown: they belonged to the chart.
 */
 
@@ -184,49 +184,6 @@ a {
   .wip-row {
     margin-inline: -80px;
   }
-}
-
-/* The facts: two titled groups, each line led by one bold word so the shape reads before the text. */
-.facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-  gap: var(--s5) var(--s7);
-  max-width: 40rem;
-  margin: var(--s7) auto 0;
-  text-align: left;
-}
-
-.fact-heading {
-  margin: 0 0 var(--s2);
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 1.25rem;
-  color: var(--ink);
-}
-
-.fact-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--rule);
-}
-
-.fact-list .chart-row {
-  text-align: left;
-  padding-block: var(--s3);
-  border-bottom: 1px solid var(--rule);
-  font-size: 15.5px;
-  line-height: 1.5;
-  text-wrap: pretty;
-}
-
-.fact-lead {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.fact-list .chart-text {
-  color: var(--ink-soft);
 }
 
 /* The solid control: Choose photos and Download. */

@@ -1,0 +1,206 @@
+/*
+  The explainer under the drop card: "How it works" as three drawings (find, clean, blend) and
+  "Private by design" as a row of icons. Pictures first, a one-line caption under each.
+
+  - Drawings share the glasses glyph's language: stroke-only, rounded caps, charcoal ink
+    (currentColor), with --diagram-faint for glare streaks, the crop strip and the arrows.
+  - Green (.mark) is spent only on what the tool marks: the eye box, the glare outline, the check.
+  - Desktop: one horizontal flow with dotted arrows. Phone: the steps stack, drawing left and
+    caption right, arrows turned downward.
+*/
+
+.explainer {
+  margin-top: var(--s8);
+}
+
+.explainer-heading {
+  margin: 0 0 var(--s5);
+  color: var(--ink-strong);
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* ---------- How it works: the three steps ---------- */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  position: relative;
+  text-align: center;
+}
+
+.step-drawing {
+  display: block;
+  width: 100%;
+  max-width: 168px;
+  height: auto;
+  margin: 0 auto;
+  color: var(--ink);
+}
+
+.step-drawing .mark {
+  stroke: var(--accent);
+}
+
+.step-drawing rect.mark,
+.step-drawing ellipse.mark {
+  stroke-dasharray: 4 4;
+}
+
+.step-drawing .faint {
+  stroke: var(--diagram-faint);
+}
+
+/* The arrow into each step after the first, centered in the gap at the drawing's mid-height. */
+.step-arrow {
+  position: absolute;
+  top: 58px;
+  left: calc(-1 * var(--s6) / 2 - 20px);
+  width: 40px;
+  height: 12px;
+  color: var(--diagram-faint);
+}
+
+.step-caption {
+  margin: var(--s3) 0 0;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+.step-footnote {
+  margin: var(--s2) 0 0;
+  color: var(--ink-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-wrap: balance;
+}
+
+/* ---------- Private by design: icons with short captions ---------- */
+
+.private {
+  margin-top: var(--s8);
+}
+
+.promises {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s5);
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.promise {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--s2);
+  text-align: center;
+}
+
+.promise-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--ink);
+}
+
+/* A paper-colored stroke under each slash so it reads as cutting through the icon. */
+.promise-icon .slash-gap {
+  stroke: var(--paper);
+  stroke-width: 6;
+}
+
+.promise-caption {
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+.promise-small-print {
+  margin: var(--s5) 0 0;
+  color: var(--ink-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* The version note now closes the column, after the explainer. */
+.explainer + .wip-row {
+  margin-top: var(--s7);
+}
+
+/* ---------- Phone: steps stack, drawing left, caption right ---------- */
+
+@media (max-width: 639px) {
+  .explainer {
+    margin-top: var(--s7);
+  }
+
+  .steps {
+    grid-template-columns: 1fr;
+    gap: var(--s5);
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    column-gap: var(--s4);
+    align-items: center;
+    text-align: left;
+  }
+
+  .step-drawing {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .step-caption {
+    grid-column: 2;
+    margin: 0;
+    align-self: end;
+  }
+
+  .step-footnote {
+    grid-column: 2;
+    align-self: start;
+  }
+
+  .step:not(:has(.step-footnote)) .step-caption {
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  /* Arrows turn downward and sit above the drawing column, in the gap between steps. */
+  .step-arrow {
+    top: calc(-1 * var(--s5) / 2 - 6px);
+    left: 40px;
+    transform: rotate(90deg);
+  }
+
+  .private {
+    margin-top: var(--s7);
+  }
+
+  .promises {
+    gap: var(--s3);
+  }
+
+  .promise-caption {
+    font-size: 13.5px;
+  }
+}

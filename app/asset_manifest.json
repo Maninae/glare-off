@@ -1,5 +1,5 @@
 {
- "version": "bd091d0f36f50afe",
+ "version": "dad8764c419fa6b7",
  "assets": [
   {
    "path": "404.html",
@@ -58,7 +58,7 @@
   },
   {
    "path": "index.html",
-   "bytes": 10229,
+   "bytes": 14550,
    "precache": true
   },
   {
@@ -212,8 +212,13 @@
    "precache": false
   },
   {
+   "path": "styles/explainer.css",
+   "bytes": 3957,
+   "precache": true
+  },
+  {
    "path": "styles/page.css",
-   "bytes": 8707,
+   "bytes": 7896,
    "precache": true
   },
   {
@@ -223,7 +228,7 @@
   },
   {
    "path": "styles/tokens.css",
-   "bytes": 2171,
+   "bytes": 2302,
    "precache": true
   },
   {

@@ -18,6 +18,7 @@
   --ink-muted: #676d69; /* quietest text: status, meta, footer (4.8:1 on paper) */
   --rule: #d8d8cf; /* hairlines */
   --matte: #e2e1d9; /* behind letterboxed photos */
+  --diagram-faint: #b4b5ac; /* glare streaks, the crop strip and arrows in the explainer drawings */
   --accent: #17654f;
   --accent-soft: #d9ebe3;
   --on-accent: #ffffff;
@@ -57,6 +58,7 @@
     --ink-muted: #979e9a; /* 6.1:1 on the surface */
     --rule: #2f3532;
     --matte: #252a28;
+    --diagram-faint: #59615d;
     --accent: #6cc9a9;
     --accent-soft: #1f3a31;
     --on-accent: #121514;
