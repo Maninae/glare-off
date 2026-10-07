@@ -85,15 +85,25 @@
         <p class="chart-text">Early version: best on white light, windows and haze. Colored screen reflections mostly stay. Next model is training.</p>
         <span class="acuity" aria-hidden="true">v0.1</span>
       </div>
-      <h2 class="visually-hidden">How it works, and what stays private</h2>
-      <ol class="chart-facts">
-        <li class="chart-row chart-row-6"><span class="chart-text">A small face finder locates each pair of eyes.</span><span class="acuity" aria-hidden="true">20/30</span></li>
-        <li class="chart-row chart-row-7"><span class="chart-text">A network cleans a strip around the glasses and marks the glare.</span><span class="acuity" aria-hidden="true">20/25</span></li>
-        <li class="chart-row chart-row-8"><span class="chart-text">Only marked pixels change. Every other pixel stays exactly as it was.</span><span class="acuity" aria-hidden="true">20/20</span></li>
-        <li class="chart-row chart-row-9"><span class="chart-text">Where glare turned an eye pure white, it is filled in, and you are told.</span><span class="acuity" aria-hidden="true">20/15</span></li>
-        <li class="chart-row chart-row-10"><span class="chart-text">Once loaded, it makes no network requests. Other sites are blocked.</span><span class="acuity" aria-hidden="true">20/13</span></li>
-        <li class="chart-row chart-row-11"><span class="chart-text">Downloads drop location, camera and date. No analytics, no ads, no cookies.</span><span class="acuity" aria-hidden="true">20/10</span></li>
-      </ol>
+      <div class="facts">
+        <section class="fact-group" aria-labelledby="facts-how">
+          <h2 class="fact-heading" id="facts-how">How it works</h2>
+          <ol class="fact-list fact-steps">
+            <li class="chart-row"><span class="fact-lead">Find.</span> <span class="chart-text">A small face finder locates each pair of eyes.</span></li>
+            <li class="chart-row"><span class="fact-lead">Clean.</span> <span class="chart-text">A network clears the strip around the glasses and marks where the glare was.</span></li>
+            <li class="chart-row"><span class="fact-lead">Blend.</span> <span class="chart-text">Only the marked pixels change. Every other pixel stays exactly as it was.</span></li>
+            <li class="chart-row"><span class="fact-lead">Honest.</span> <span class="chart-text">Where glare turned an eye pure white, it is filled in, and you are told.</span></li>
+          </ol>
+        </section>
+        <section class="fact-group" aria-labelledby="facts-private">
+          <h2 class="fact-heading" id="facts-private">Private by design</h2>
+          <ul class="fact-list">
+            <li class="chart-row"><span class="fact-lead">Offline.</span> <span class="chart-text">Once loaded, it makes no network requests. Other sites are blocked.</span></li>
+            <li class="chart-row"><span class="fact-lead">Stripped.</span> <span class="chart-text">Downloads drop location, camera and date.</span></li>
+            <li class="chart-row"><span class="fact-lead">Quiet.</span> <span class="chart-text">No analytics, no ads, no cookies, no account.</span></li>
+          </ul>
+        </section>
+      </div>
     </div>
 
     <div class="engine-status" id="engine-status" role="status" aria-live="polite" data-tone="loading">
