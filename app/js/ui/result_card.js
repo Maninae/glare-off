@@ -1,37 +1,52 @@
 /**
- * One photo's entry in the results list: its state, the compare view, the view picker
- * (whole photo or one face's eyes at full resolution), the strength slider, per-face
- * keep/revert toggles, the lost-detail note, and the Download button.
+ * One photo's entry in the results list: its state, the compare view, the face picker (one
+ * tile per face, ui/face_picker.js), the view picker (whole photo or one face's eyes at full
+ * resolution), the strength slider, the lost-detail notes, and the Download button.
  *
- * States (data-state on the <li>): queued -> working -> done | no-face | no-glare | error.
- * The card never touches the worker; it calls `onDownload(card)` and main.js does the rest.
- * Full-resolution face regions come from `loadRegions(card)` (main.js: the one-photo cache in
- * photo/visible_photo_regions.js), so a card holds no region-size pixels of its own.
+ * States (data-state on the <li>): queued -> working -> done | no-glare | no-glasses | no-face
+ * | error. "done" = at least one face has glare to blend; a forced-on face can move a
+ * no-glare/no-glasses card to done.
+ *
+ * The card owns each face's switch (overriddenByFace, ui/face_switch_state.js); the download
+ * applies exactly the faces that are switched on and have glare (currentExportSettings).
+ * It never touches the worker: `onDownload(card)`, `onRunFace(card, faceIndex)` (forced-on
+ * face the gate skipped; main.js replaces result.faces[faceIndex]) and `onFacesChanged(card)`
+ * go to main.js. Full-resolution face regions come from `loadRegions(card)` (the one-photo
+ * cache in photo/visible_photo_regions.js), so a card holds no region-size pixels of its own.
  */
 
 import { CompareView } from "./compare_view.js";
+import { FacePicker } from "./face_picker.js";
+import { isFaceSwitchedOn } from "./face_switch_state.js";
 import { buildFacePatches, buildRegionCanvas, composeAfterPreview } from "../photo/photo_compose.js";
 
 const WHOLE_PHOTO_VIEW = "whole";
 const WAITING_THUMBNAIL_LONG_SIDE = 960;
+const LOST_DETAIL_NOTE = "part of a lens here was pure white, so the eye under it could not be seen. That area is filled in, not recovered; check it up close.";
 
 export class ResultCard {
-  constructor(template, { fileName, cardIndex, onDownload, loadRegions }) {
+  constructor(template, { fileName, cardIndex, onDownload, onRunFace, onFacesChanged, loadRegions }) {
     this.element = template.content.firstElementChild.cloneNode(true);
     this.cardIndex = cardIndex;
     this.fileName = fileName;
     this.onDownload = onDownload;
+    this.onRunFace = onRunFace;
+    this.onFacesChanged = onFacesChanged;
     this.loadRegions = loadRegions;
     this.redrawTicket = 0; // a slower region read must not paint over a newer redraw
     this.compareView = new CompareView(this.element.querySelector(".compare"));
+    this.facePicker = new FacePicker(this.element.querySelector(".face-picker"), { onToggle: (faceIndex) => this.toggleFace(faceIndex) });
     this.downloadButton = this.element.querySelector(".result-download");
     this.controlsElement = this.element.querySelector(".result-controls");
     this.messageElement = this.element.querySelector(".result-message");
+    this.notesElement = this.element.querySelector(".face-notes");
     this.metaElement = this.element.querySelector(".result-meta");
     this.strengthInput = this.element.querySelector(".strength-range");
     this.strengthOutput = this.element.querySelector(".strength-value");
-    this.result = null; // the worker's "result" message
-    this.enabledByFace = [];
+    this.result = null; // the worker's "result" message, without region bytes or thumbnails
+    this.overriddenByFace = [];
+    this.busyByFace = [];
+    this.viewPickerFaceKey = "";
     this.strength = 1;
     this.currentView = WHOLE_PHOTO_VIEW;
     this.afterPreviewCanvas = new OffscreenCanvas(1, 1);
@@ -80,7 +95,7 @@ export class ResultCard {
       this.metaElement.textContent = `${stageMessage.photoWidth} × ${stageMessage.photoHeight} pixels`;
       this.compareView.setWorkingText("Finding faces");
     } else if (stageMessage.stage === "cleaning") {
-      this.compareView.setWorkingText(stageMessage.faceCount > 1 ? `Cleaning the lenses, face ${stageMessage.faceIndex + 1} of ${stageMessage.faceCount}` : "Cleaning the lenses");
+      this.compareView.setWorkingText(stageMessage.faceCount > 1 ? `Checking face ${stageMessage.faceIndex + 1} of ${stageMessage.faceCount}` : "Checking the lenses");
     } else if (stageMessage.stage === "starting") {
       this.compareView.setWorkingText("Getting ready");
     }
@@ -92,37 +107,96 @@ export class ResultCard {
     this.showMessage(text);
   }
 
-  /** The worker finished this photo. */
-  showResult(result) {
+  /** The worker finished this photo. `thumbnailBitmaps`: one eye-crop picture per face. */
+  showResult(result, thumbnailBitmaps) {
     this.result = result;
-    const { faces, photoWidth, photoHeight, previewBitmap } = result;
-    this.enabledByFace = faces.map((face) => face.hasGlare);
-    const glareFaceCount = faces.filter((face) => face.hasGlare).length;
-    this.metaElement.textContent = describeOutcome(photoWidth, photoHeight, faces.length, glareFaceCount);
+    const { faces, previewBitmap } = result;
+    this.overriddenByFace = faces.map(() => false);
+    this.busyByFace = faces.map(() => false);
     if (faces.length === 0) {
       this.setState("no-face");
+      this.metaElement.textContent = `${result.photoWidth} × ${result.photoHeight} pixels, no face found`;
       this.compareView.showPlaceholder(previewBitmap, previewBitmap.width, previewBitmap.height);
       this.compareView.setWorkingText("No face found");
       this.showMessage("No face was found, so nothing was changed. The tool needs a face turned roughly toward the camera, at least about 30 pixels across.");
       return;
     }
-    if (glareFaceCount === 0) {
-      this.setState("no-glare");
-      this.compareView.showPlaceholder(previewBitmap, previewBitmap.width, previewBitmap.height);
-      this.compareView.setWorkingText("No glare found");
-      this.showMessage(faces.length === 1 ? "No glare was found on these lenses (or no glasses), so the photo is unchanged." : "No glare was found on any of the lenses, so the photo is unchanged.");
-      return;
-    }
-    this.setState("done");
-    this.downloadButton.disabled = false;
-    this.controlsElement.hidden = false;
-    this.buildViewPicker();
-    this.buildFaceList();
-    this.redraw();
+    this.facePicker.build(faces.length, thumbnailBitmaps);
+    thumbnailBitmaps.forEach((bitmap) => bitmap?.close());
+    this.refreshFaces();
   }
 
+  isFaceOn(faceIndex) {
+    return isFaceSwitchedOn(this.result.faces[faceIndex].glassesDetected, this.overriddenByFace[faceIndex]);
+  }
+
+  /** A tile was pressed: flip the override; a skipped face switched on runs the glare model first. */
+  async toggleFace(faceIndex) {
+    if (this.busyByFace[faceIndex]) return;
+    this.overriddenByFace[faceIndex] = !this.overriddenByFace[faceIndex];
+    if (this.isFaceOn(faceIndex) && !this.result.faces[faceIndex].glareRun) {
+      this.busyByFace[faceIndex] = true;
+      this.refreshFaces();
+      try {
+        await this.onRunFace(this, faceIndex);
+      } catch (error) {
+        this.overriddenByFace[faceIndex] = !this.overriddenByFace[faceIndex];
+        this.showMessage(`Could not check face ${faceIndex + 1} (${error.message}).`);
+      } finally {
+        this.busyByFace[faceIndex] = false;
+      }
+    }
+    this.refreshFaces();
+  }
+
+  /** Bring tiles, notes, meta line, state, controls and the picture in line with the faces. */
+  refreshFaces() {
+    const { faces, previewBitmap, photoWidth, photoHeight } = this.result;
+    this.facePicker.update(faces, this.overriddenByFace, this.busyByFace);
+    const appliedFaceCount = faces.filter((face, faceIndex) => face.hasGlare && this.isFaceOn(faceIndex)).length;
+    this.metaElement.textContent = describeOutcome(photoWidth, photoHeight, faces, appliedFaceCount);
+    this.renderLostDetailNotes();
+    this.onFacesChanged?.(this);
+    if (!faces.some((face) => face.hasGlare)) {
+      const anyFaceChecked = faces.some((face) => face.glareRun);
+      this.setState(anyFaceChecked ? "no-glare" : "no-glasses");
+      this.compareView.showPlaceholder(previewBitmap, previewBitmap.width, previewBitmap.height);
+      this.compareView.setWorkingText(anyFaceChecked ? "No glare found" : "No glasses found");
+      this.showMessage(describeNothingToRemove(faces, anyFaceChecked));
+      return;
+    }
+    if (this.element.dataset.state !== "done") {
+      this.setState("done");
+      this.showMessage(null);
+      this.downloadButton.disabled = false;
+      this.controlsElement.hidden = false;
+    }
+    this.buildViewPicker();
+    this.scheduleRedraw();
+  }
+
+  renderLostDetailNotes() {
+    const faces = this.result.faces;
+    const notes = faces
+      .map((face, faceIndex) => (face.hasGlare && face.showLostDetailNote && this.isFaceOn(faceIndex) ? faceIndex : -1))
+      .filter((faceIndex) => faceIndex >= 0)
+      .map((faceIndex) => {
+        const note = document.createElement("p");
+        note.className = "face-note";
+        note.textContent = faces.length === 1 ? capitalize(LOST_DETAIL_NOTE) : `Face ${faceIndex + 1}: ${LOST_DETAIL_NOTE}`;
+        return note;
+      });
+    this.notesElement.replaceChildren(...notes);
+  }
+
+  /** "Whole photo" plus one "up close" option per face with glare; rebuilt only when that set changes. */
   buildViewPicker() {
+    const glareFaceIndices = this.result.faces.map((face, faceIndex) => (face.hasGlare ? faceIndex : -1)).filter((faceIndex) => faceIndex >= 0);
+    const faceKey = glareFaceIndices.join(",");
+    if (faceKey === this.viewPickerFaceKey) return;
+    this.viewPickerFaceKey = faceKey;
     const optionsElement = this.element.querySelector(".view-options");
+    optionsElement.replaceChildren();
     const groupName = `view-${this.cardIndex}`;
     const addOption = (value, label) => {
       const optionLabel = document.createElement("label");
@@ -142,51 +216,9 @@ export class ResultCard {
       optionsElement.append(optionLabel);
     };
     addOption(WHOLE_PHOTO_VIEW, "Whole photo");
-    const glareFaceIndices = this.result.faces.map((face, faceIndex) => (face.hasGlare ? faceIndex : -1)).filter((faceIndex) => faceIndex >= 0);
     for (const faceIndex of glareFaceIndices) {
-      addOption(String(faceIndex), glareFaceIndices.length === 1 ? "Eyes up close" : `Face ${faceIndex + 1} up close`);
+      addOption(String(faceIndex), this.result.faces.length === 1 ? "Eyes up close" : `Face ${faceIndex + 1} up close`);
     }
-  }
-
-  buildFaceList() {
-    const listElement = this.element.querySelector(".face-list");
-    const faces = this.result.faces;
-    faces.forEach((face, faceIndex) => {
-      const item = document.createElement("li");
-      item.className = "face-item";
-      const row = document.createElement("div");
-      row.className = "face-item-row";
-      const title = document.createElement("span");
-      title.className = "face-item-title";
-      title.textContent = faces.length === 1 ? "Glasses" : `Face ${faceIndex + 1}`;
-      row.append(title);
-      if (face.hasGlare) {
-        const toggle = document.createElement("label");
-        toggle.className = "face-toggle";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = true;
-        checkbox.addEventListener("change", () => {
-          this.enabledByFace[faceIndex] = checkbox.checked;
-          this.scheduleRedraw();
-        });
-        toggle.append(checkbox, document.createTextNode("Remove glare"));
-        row.append(toggle);
-      } else {
-        const status = document.createElement("span");
-        status.className = "face-item-status";
-        status.textContent = "No glare found";
-        row.append(status);
-      }
-      item.append(row);
-      if (face.hasGlare && face.showLostDetailNote) {
-        const note = document.createElement("p");
-        note.className = "face-note";
-        note.textContent = "Part of a lens here was pure white, so the eye under it could not be seen. That area is filled in, not recovered; check it up close.";
-        item.append(note);
-      }
-      listElement.append(item);
-    });
   }
 
   scheduleRedraw() {
@@ -198,9 +230,13 @@ export class ResultCard {
     });
   }
 
-  /** Crop-space faces that are switched on, and the strength: what the download applies. */
+  enabledByFace() {
+    return this.result.faces.map((face, faceIndex) => this.isFaceOn(faceIndex));
+  }
+
+  /** Crop-space faces that are switched on and have glare, and the strength: what the download applies. */
   currentExportSettings() {
-    return { faces: this.result.faces.filter((face, faceIndex) => face.hasGlare && this.enabledByFace[faceIndex]), strength: this.strength };
+    return { faces: this.result.faces.filter((face, faceIndex) => face.hasGlare && this.isFaceOn(faceIndex)), strength: this.strength };
   }
 
   async redraw() {
@@ -215,7 +251,7 @@ export class ResultCard {
     }
     if (ticket !== this.redrawTicket) return;
     const { previewBitmap, photoWidth, faces } = this.result;
-    const patches = buildFacePatches(faces, entriesByFace, this.enabledByFace, this.strength);
+    const patches = buildFacePatches(faces, entriesByFace, this.enabledByFace(), this.strength);
     if (this.currentView === WHOLE_PHOTO_VIEW) {
       const afterCanvas = composeAfterPreview(this.afterPreviewCanvas, previewBitmap, photoWidth, patches);
       this.compareView.showPair(previewBitmap, afterCanvas, previewBitmap.width, previewBitmap.height);
@@ -235,10 +271,25 @@ export class ResultCard {
   }
 }
 
-function describeOutcome(photoWidth, photoHeight, faceCount, glareFaceCount) {
+function capitalize(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function describeOutcome(photoWidth, photoHeight, faces, appliedFaceCount) {
   const size = `${photoWidth} × ${photoHeight} pixels`;
-  if (faceCount === 0) return `${size}, no face found`;
-  const faceWord = faceCount === 1 ? "1 face" : `${faceCount} faces`;
-  if (glareFaceCount === 0) return `${size}, ${faceWord}, no glare`;
-  return `${size}, ${faceWord}, glare removed on ${glareFaceCount}`;
+  const faceWord = faces.length === 1 ? "1 face" : `${faces.length} faces`;
+  if (!faces.some((face) => face.glareRun)) return `${size}, ${faceWord}, no glasses`;
+  if (!faces.some((face) => face.hasGlare)) return `${size}, ${faceWord}, no glare`;
+  return `${size}, ${faceWord}, glare removed on ${appliedFaceCount}`;
+}
+
+function describeNothingToRemove(faces, anyFaceChecked) {
+  if (!anyFaceChecked) {
+    return faces.length === 1
+      ? "No glasses were found, so the photo is unchanged. If there are glasses, press the face below to check it anyway."
+      : "No glasses were found on any face, so the photo is unchanged. Press a face below to check it anyway.";
+  }
+  if (faces.length === 1) return "No glare was found on these lenses, so the photo is unchanged.";
+  const anyFaceSkipped = faces.some((face) => !face.glareRun);
+  return anyFaceSkipped ? "No glare was found on the faces with glasses, so the photo is unchanged. Press a skipped face below to check it too." : "No glare was found on any of the lenses, so the photo is unchanged.";
 }

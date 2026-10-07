@@ -71,7 +71,12 @@ export function computeCropSpaceDelta({ cropPlanarRgb, cleanPlanarRgb, masksPlan
   return { deltaLayers, glareMask, lostDetailMask, glarePixelCount, lostDetailPixelCount };
 }
 
-async function runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, cropSizeMultiplier }) {
+/**
+ * The face's eye crop at `cropSizeMultiplier` x 512x256: { cropPlanarRgb, cropWidth, cropHeight,
+ * photoToEyeCropAffine }. The 1x crop is the one tensor both the glasses classifier and the
+ * glare model receive (pipeline/glasses_gate_pass.js computes it once per face).
+ */
+export function extractFaceEyeCrop({ face, photoWidth, photoHeight, readPhotoRegion, cropSizeMultiplier = 1 }) {
   const cropWidth = EYE_CROP_WIDTH * cropSizeMultiplier;
   const cropHeight = EYE_CROP_HEIGHT * cropSizeMultiplier;
   const photoToEyeCropAffine = computePhotoToEyeCropAffine(face.imageLeftEyeXY, face.imageRightEyeXY, cropWidth, cropHeight);
@@ -85,6 +90,11 @@ async function runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runG
     cropWidth,
     cropHeight,
   });
+  return { cropPlanarRgb, cropWidth, cropHeight, photoToEyeCropAffine };
+}
+
+async function runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, cropSizeMultiplier, precomputedEyeCrop = null }) {
+  const { cropPlanarRgb, cropWidth, cropHeight, photoToEyeCropAffine } = precomputedEyeCrop ?? extractFaceEyeCrop({ face, photoWidth, photoHeight, readPhotoRegion, cropSizeMultiplier });
   const { cleanPlanarRgb, masksPlanar } = await runGlareModel(cropPlanarRgb, cropWidth, cropHeight);
   const cropDelta = computeCropSpaceDelta({ cropPlanarRgb, cleanPlanarRgb, masksPlanar, cropWidth, cropHeight });
   return { cropWidth, cropHeight, cropSizeMultiplier, photoToEyeCropAffine, ...cropDelta };
@@ -99,10 +109,11 @@ async function runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runG
  *     cropDeltaLayers: [R, G, B] (0..1 units), cropGlareMask }
  *   region and the crop* layers are null when the face has no glare. Nothing here is the size
  *   of the photo region; blend/face_region_patch.js warps on demand.
+ * `eyeCrop1x` (optional): the face's 1x crop from extractFaceEyeCrop, reused instead of re-warped.
  */
-export async function runGlarePassOnFace({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, highResPassEnabled = false }) {
+export async function runGlarePassOnFace({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, highResPassEnabled = false, eyeCrop1x = null }) {
   const affine1x = computePhotoToEyeCropAffine(face.imageLeftEyeXY, face.imageRightEyeXY);
-  let pass = await runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, cropSizeMultiplier: 1 });
+  let pass = await runOnePass({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, cropSizeMultiplier: 1, precomputedEyeCrop: eyeCrop1x });
   const passArea = () => pass.cropWidth * pass.cropHeight;
   const hasGlareAfterFirstPass = pass.glarePixelCount / passArea() >= GLARE_PRESENT_MIN_FRACTION;
   if (hasGlareAfterFirstPass && chooseCropSizeMultiplier(affine1x, highResPassEnabled) === 2) {

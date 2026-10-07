@@ -18,7 +18,7 @@ export class GlareWorkerClient {
 
   /**
    * Start the worker and load both models.
-   * `initOptions`: { ortModuleUrl, wasmUrl, faceDetectorUrl, glareModelUrl, backend, numThreads, expectedTotalBytes }.
+   * `initOptions`: { ortModuleUrl, wasmUrl, faceDetectorUrl, glareModelUrl, glassesClassifierUrl, backend, numThreads, expectedTotalBytes }.
    * `onProgress(loadedBytes, expectedTotalBytes)` fires per downloaded chunk.
    * Resolves to { backend, numThreads, crossOriginIsolated, timings }.
    */
@@ -87,9 +87,17 @@ export class GlareWorkerClient {
     });
   }
 
-  /** Detect faces and clean every one. Resolves to the worker's "result" message. */
-  processPhoto(file, { previewLongSide, highResPassEnabled, onStage }) {
-    return this.request({ type: "process-photo", file, previewLongSide, highResPassEnabled }, { onStage });
+  /** Detect faces, gate each on glasses, clean the ones with glasses. Resolves to the worker's "result" message. */
+  processPhoto(file, { previewLongSide, highResPassEnabled, glassesProbabilityThreshold, onStage }) {
+    return this.request({ type: "process-photo", file, previewLongSide, highResPassEnabled, glassesProbabilityThreshold }, { onStage });
+  }
+
+  /**
+   * Run the glare model on a face the gate skipped (`face` carries its kept crop planes).
+   * Resolves to { face, regionOriginalRgba (null without glare), facePassMs }.
+   */
+  runFace(file, face, { photoWidth, photoHeight, highResPassEnabled }) {
+    return this.request({ type: "run-face", file, face, photoWidth, photoHeight, highResPassEnabled });
   }
 
   /** Original RGBA bytes of photo rects (fresh decode). Resolves to an array, one per rect. */

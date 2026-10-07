@@ -21,6 +21,7 @@ No public glare/no-glare eyeglass dataset is freely licensed, so the model train
 | `training_sources/` | Acquire clean source photos, license filter, lens masks, eye crops, the source manifest |
 | `glare_synthesis/` | Procedural lens-glare renderer: clean crop + lens masks in, glared crop + masks out |
 | `glare_model/` | Network architecture, training loop, ONNX export, configs |
+| `glasses_classifier/` | Tiny glasses / no-glasses gate on the same eye crop, so the app skips bare faces; training, eval, ONNX export |
 | `evaluation/` | Real-photo eval set, side-by-side sheets, metrics on held-out synthetic pairs |
 | `app/` | The static site (HTML/CSS/JS, onnxruntime-web, models in `app/models/`) |
 | `tests/` | pytest suite |

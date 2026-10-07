@@ -7,8 +7,14 @@
  *   2. Network isolation: every request goes to the page's own origin, and ZERO requests
  *      happen between "engine ready" and the end of processing and downloading.
  *   3. Downloads are produced at the original resolution; EXIF orientation is baked in.
- *   4. Bit-exactness (PNG in, PNG out): every pixel outside the warped glare mask is byte-identical
- *      to the input; with every face switched off, the whole download is byte-identical.
+ *   4. Bit-exactness (PNG in, PNG out): every pixel outside the warped glare masks of the
+ *      switched-on faces is byte-identical to the input, and so is every pixel in the crop area
+ *      of a face the glasses gate skipped; with every face switched off, the whole download is
+ *      byte-identical.
+ *   4a. Glasses gate: the face without glasses in the heavy-reflection and ring-light photos comes
+ *      back auto-off (the faces with glasses auto-on); clicking a tile flips a face and the
+ *      download follows; with `?glassesthreshold=2` (every face skipped) a click runs the glare
+ *      model on demand, offline from the network, and only that face's pixels change.
  *   4b. Memory: after all photos are processed, no face result holds a region-size array, only
  *      one photo holds full-resolution regions, and that moves when another card is touched.
  *      JS heap (after a forced GC) goes to summary.json.
@@ -31,6 +37,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { loadPlaywright, serveAppDirectory, waitForAppState } from "./browser_test_support.mjs";
+import { checkAllFacesSwitchedOff, checkClickFlipsOneFace, checkForcedFaceOnDemand, checkGlassesGateDecisions } from "./e2e_glasses_gate_checks.mjs";
+import { allDone, checkBitExactness, downloadCard as downloadCardInto, downloadedImageSize, isNetworkUrl, recordRequests } from "./e2e_page_checks.mjs";
 import { REPO_ROOT, SCRATCH_DIRECTORY, check, finish } from "./node_test_support.mjs";
 
 const E2E_PHOTO_DIRECTORY = join(SCRATCH_DIRECTORY, "app-e2e");
@@ -73,18 +81,6 @@ const server = await serveAppDirectory();
 const appOrigin = new URL(server.baseUrl).origin;
 const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu"] });
 
-function recordRequests(context) {
-  const requests = [];
-  context.on("request", (request) => requests.push({ url: request.url(), at: Date.now(), type: request.resourceType() }));
-  return requests;
-}
-
-function isNetworkUrl(url) {
-  return url.startsWith("http:") || url.startsWith("https:");
-}
-
-const allDone = (state) => state.jobs.length > 0 && state.jobs.every((job) => !["queued", "working"].includes(job.state));
-
 async function screenshot(target, name) {
   const path = join(SCREENSHOT_DIRECTORY, `${name}.png`);
   await target.screenshot({ path });
@@ -110,68 +106,7 @@ function compareFacesToPython(fileName, jobState) {
   return worstEyeDifference;
 }
 
-/** Click a card's Download button and save the file. Returns the saved path. */
-async function downloadCard(page, cardIndex) {
-  const card = page.locator(".result").nth(cardIndex);
-  const [download] = await Promise.all([page.waitForEvent("download", { timeout: 120_000 }), card.locator(".result-download").click()]);
-  const savedPath = join(DOWNLOAD_DIRECTORY, `${cardIndex}-${download.suggestedFilename()}`);
-  await download.saveAs(savedPath);
-  return savedPath;
-}
-
-/** In the page: decode the original and the download, compare pixels against the face masks. */
-async function checkBitExactness(page, jobIndex, originalPath, downloadedPath) {
-  return page.evaluate(
-    async ({ jobIndex, originalBase64, downloadedBase64 }) => {
-      const decode = async (base64) => {
-        const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-        const bitmap = await createImageBitmap(new Blob([bytes]), { imageOrientation: "from-image", premultiplyAlpha: "none" });
-        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-        const context = canvas.getContext("2d", { willReadFrequently: true });
-        context.drawImage(bitmap, 0, 0);
-        return { width: bitmap.width, height: bitmap.height, pixels: context.getImageData(0, 0, bitmap.width, bitmap.height).data };
-      };
-      const original = await decode(originalBase64);
-      const downloaded = await decode(downloadedBase64);
-      if (original.width !== downloaded.width || original.height !== downloaded.height) return { sizeMismatch: true };
-      const insideMask = new Uint8Array(original.width * original.height);
-      const faces = window.__glareOffDebug.describe().jobs[jobIndex].faces;
-      for (const [faceIndex, face] of faces.entries()) {
-        if (!face.hasGlare) continue;
-        const regionGlareMask = window.__glareOffDebug.warpGlareMaskToRegion(jobIndex, faceIndex);
-        const { x, y, width, height } = face.region;
-        for (let row = 0; row < height; row += 1) {
-          for (let column = 0; column < width; column += 1) {
-            if (regionGlareMask[row * width + column] > 0) insideMask[(y + row) * original.width + x + column] = 1;
-          }
-        }
-      }
-      let changedOutsideMask = 0;
-      let changedInsideMask = 0;
-      let maskedPixelCount = 0;
-      for (let pixel = 0; pixel < insideMask.length; pixel += 1) {
-        let differs = false;
-        for (let channel = 0; channel < 4; channel += 1) if (original.pixels[pixel * 4 + channel] !== downloaded.pixels[pixel * 4 + channel]) differs = true;
-        if (insideMask[pixel]) maskedPixelCount += 1;
-        if (differs && insideMask[pixel]) changedInsideMask += 1;
-        if (differs && !insideMask[pixel]) changedOutsideMask += 1;
-      }
-      return { sizeMismatch: false, changedOutsideMask, changedInsideMask, maskedPixelCount, totalPixels: insideMask.length };
-    },
-    { jobIndex, originalBase64: readFileSync(originalPath).toString("base64"), downloadedBase64: readFileSync(downloadedPath).toString("base64") },
-  );
-}
-
-async function downloadedImageSize(page, downloadedPath) {
-  return page.evaluate(async (base64) => {
-    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-    const blob = new Blob([bytes]);
-    const bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" });
-    // A JPEG that still carried an EXIF orientation would decode differently with "none".
-    const rawBitmap = await createImageBitmap(blob, { imageOrientation: "none" });
-    return { width: bitmap.width, height: bitmap.height, rawWidth: rawBitmap.width, rawHeight: rawBitmap.height };
-  }, readFileSync(downloadedPath).toString("base64"));
-}
+const downloadCard = (page, cardIndex) => downloadCardInto(page, cardIndex, DOWNLOAD_DIRECTORY);
 
 // ---------- 1-4: first visit, WASM, desktop light ----------
 const firstContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light", acceptDownloads: true });
@@ -196,10 +131,19 @@ const doneState = await waitForAppState(page, allDone, { timeoutMs: 300_000 });
 let totalFaces = 0;
 for (const [jobIndex, jobState] of doneState.jobs.entries()) {
   const fileName = basename(testPhotoPaths[jobIndex]);
-  check(`${fileName}: processed (state ${jobState.state})`, ["done", "no-glare"].includes(jobState.state));
+  check(`${fileName}: processed (state ${jobState.state})`, ["done", "no-glare", "no-glasses"].includes(jobState.state));
   const worstEye = compareFacesToPython(fileName, jobState);
   totalFaces += jobState.faces.length;
-  summary.photos[fileName] = { size: `${jobState.photoWidth}x${jobState.photoHeight}`, faces: jobState.faces.length, glareFaces: jobState.faces.filter((face) => face.hasGlare).length, worstEyeDifferencePx: worstEye, timingsWasm1Thread: jobState.timings };
+  summary.photos[fileName] = {
+    size: `${jobState.photoWidth}x${jobState.photoHeight}`,
+    faces: jobState.faces.length,
+    glareFaces: jobState.faces.filter((face) => face.hasGlare).length,
+    faceSwitchStates: jobState.faces.map((face) => face.switchState),
+    glassesProbabilities: jobState.faces.map((face) => Number(face.glassesProbability.toFixed(4))),
+    worstEyeDifferencePx: worstEye,
+    timingsWasm1Thread: jobState.timings,
+  };
+  checkGlassesGateDecisions(fileName, jobState); // 4a
 }
 check("reference WebP photos: 5 faces in total", doneState.jobs.slice(0, 3).reduce((total, job) => total + job.faces.length, 0) === 5);
 const rotatedJob = doneState.jobs[testPhotoPaths.findIndex((path) => path.endsWith("rotated-exif6.jpg"))];
@@ -236,18 +180,17 @@ for (const [jobIndex, jobState] of doneState.jobs.entries()) {
     const exactness = await checkBitExactness(page, jobIndex, testPhotoPaths[jobIndex], savedPath);
     summary.photos[fileName].bitExactness = exactness;
     check(`${fileName}: zero pixels changed outside the glare mask`, !exactness.sizeMismatch && exactness.changedOutsideMask === 0, JSON.stringify(exactness));
+    if (exactness.skippedFaceAreaPixels > 0) check(`${fileName}: zero pixels changed in the skipped (no glasses) face's crop area`, exactness.changedInSkippedFaceArea === 0, `${exactness.skippedFaceAreaPixels} px area`);
     check(`${fileName}: some masked pixels did change (the patch was applied)`, exactness.changedInsideMask > 0);
   }
 }
 
-// All faces off -> the download must equal the input exactly.
+// All faces off by clicking their tiles -> the download must equal the input exactly.
 const pngJobIndex = testPhotoPaths.findIndex((path) => path.endsWith("ring-light-glare-glasses-before.png"));
-const pngCard = page.locator(".result").nth(pngJobIndex);
-for (const checkbox of await pngCard.locator(".face-toggle input").all()) await checkbox.uncheck();
-const allOffPath = await downloadCard(page, pngJobIndex);
-const allOff = await checkBitExactness(page, pngJobIndex, testPhotoPaths[pngJobIndex], allOffPath);
-check("every face switched off: download is byte-identical to the input pixels", allOff.changedOutsideMask === 0 && allOff.changedInsideMask === 0, JSON.stringify(allOff));
-for (const checkbox of await pngCard.locator(".face-toggle input").all()) await checkbox.check();
+await checkAllFacesSwitchedOff(page, pngJobIndex, testPhotoPaths[pngJobIndex], DOWNLOAD_DIRECTORY);
+// A click flips one face and the download follows it.
+const heavyPngJobIndex = testPhotoPaths.findIndex((path) => path.endsWith("heavy-reflection-glasses-before.png"));
+await checkClickFlipsOneFace(page, heavyPngJobIndex, testPhotoPaths[heavyPngJobIndex], downloadsByJob[heavyPngJobIndex], DOWNLOAD_DIRECTORY);
 
 // Download all -> a ZIP.
 const [zipDownload] = await Promise.all([page.waitForEvent("download", { timeout: 180_000 }), page.locator("#download-all-button").click()]);
@@ -286,6 +229,9 @@ await page.waitForTimeout(200);
 await screenshot(page.locator(".result").first(), "desktop-light-eyes-zoom");
 const memoryAfterSwitch = await page.evaluate(() => window.__glareOffDebug.describeMemory());
 check("memory: touching another card moves the full-res cache to it", memoryAfterSwitch.visibleRegionCacheJobIndex === 0, `${(memoryAfterSwitch.visibleRegionCacheBytes / 1e6).toFixed(1)} MB`);
+
+// ---------- 4c: every face skipped (?glassesthreshold=2), one forced on from its tile ----------
+summary.forcedOnDemand = await checkForcedFaceOnDemand({ browser, baseUrl: server.baseUrl, appOrigin, photoPath: testPhotoPaths[heavyPngJobIndex], downloadDirectory: DOWNLOAD_DIRECTORY, screenshot });
 
 // ---------- 5: second visit (service worker in control, cross-origin isolated) ----------
 await page.goto(`${server.baseUrl}?backend=wasm&debug`);

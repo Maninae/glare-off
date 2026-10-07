@@ -35,6 +35,17 @@ export class VisiblePhotoRegionCache {
   }
 
   /**
+   * A face of `owner` gained glare after the fact (forced on, glare model ran on demand).
+   * Takes the region bytes the worker read alongside; if another photo holds the cache, the
+   * next entriesFor(owner) re-reads every glare face anyway, so there is nothing to keep.
+   */
+  adoptFace(owner, faceIndex, face, regionOriginalRgba) {
+    if (this.pendingOwner === owner) this.pendingOwner = this.pendingEntries = null; // its read predates this face
+    if (this.owner !== owner) return;
+    this.entriesByFace[faceIndex] = face.hasGlare ? { regionOriginalRgba, regionDeltaLayers: warpFaceDeltaToRegion(face) } : null;
+  }
+
+  /**
    * Entries for `owner` ({ file, result }), reading them if another photo holds the cache.
    * Concurrent calls for the same owner share one read.
    */

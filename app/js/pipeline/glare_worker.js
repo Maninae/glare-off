@@ -8,9 +8,14 @@
  * via import.meta.url, so no wasmPaths juggling; we pass the .wasm bytes ourselves
  * (env.wasm.wasmBinary) so the download shows real progress.
  *
- * Protocol (page -> worker): init, process-photo, read-regions, export-photo. Worker -> page:
- * progress, ready | init-failed, stage, result, regions, exported, error. Every reply carries
- * the requestId. read-regions and export-photo need no models (a model-free worker serves them).
+ * Protocol (page -> worker): init, process-photo, run-face, read-regions, export-photo.
+ * Worker -> page: progress, ready | init-failed, stage, result, face-result, regions, exported,
+ * error. Every reply carries the requestId. read-regions and export-photo need no models (a
+ * model-free worker serves them).
+ *
+ * Three models: YuNet (eyes), the glasses classifier (the gate, pipeline/glasses_gate_pass.js)
+ * and the glare model. A face the classifier calls glasses-free never reaches the glare model;
+ * run-face runs it later from the crop the page kept, when the visitor forces that face on.
  *
  * - YuNet always runs on the WASM CPU path (its input size changes per photo, which would
  *   recompile GPU shaders every time); the glare model uses WebGPU when the page chose it.
@@ -20,13 +25,15 @@
 
 import { computeDetectionSize, buildYunetInputTensor, decodeYunetOutputs, faceRowsToDetectedFaceEyes } from "./yunet_face_decode.js";
 import { areaDownscaleRgba } from "./area_downscale.js";
-import { runGlarePassOnFace } from "./glare_crop_pass.js";
+import { runFaceThroughGlassesGate, runSkippedFaceGlarePass } from "./glasses_gate_pass.js";
+import { makeEyeCropThumbnail } from "./eye_crop_thumbnail.js";
 import { buildFullResolutionFacePatch } from "../blend/face_region_patch.js";
 
 let onnxRuntime = null;
 let faceDetectorSession = null;
 let glareSession = null;
 let glareInputName = "glare_crop";
+let glassesClassifierSession = null;
 let activeBackend = "wasm";
 
 function post(message, transfer = []) {
@@ -56,7 +63,7 @@ async function fetchBytesWithProgress(url, onChunk) {
   return bytes;
 }
 
-async function initialize({ ortModuleUrl, wasmUrl, faceDetectorUrl, glareModelUrl, backend, numThreads, expectedTotalBytes }) {
+async function initialize({ ortModuleUrl, wasmUrl, faceDetectorUrl, glareModelUrl, glassesClassifierUrl, backend, numThreads, expectedTotalBytes }) {
   const initStarted = performance.now();
   let loadedBytes = 0;
   const reportChunk = (byteCount) => {
@@ -64,10 +71,11 @@ async function initialize({ ortModuleUrl, wasmUrl, faceDetectorUrl, glareModelUr
     post({ type: "progress", loadedBytes, expectedTotalBytes });
   };
   onnxRuntime = await import(ortModuleUrl);
-  const [wasmBinary, faceDetectorBytes, glareModelBytes] = await Promise.all([
+  const [wasmBinary, faceDetectorBytes, glareModelBytes, glassesClassifierBytes] = await Promise.all([
     fetchBytesWithProgress(wasmUrl, reportChunk),
     fetchBytesWithProgress(faceDetectorUrl, reportChunk),
     fetchBytesWithProgress(glareModelUrl, reportChunk),
+    fetchBytesWithProgress(glassesClassifierUrl, reportChunk),
   ]);
   const downloadedMs = performance.now() - initStarted;
   onnxRuntime.env.wasm.wasmBinary = wasmBinary.buffer;
@@ -88,7 +96,17 @@ async function initialize({ ortModuleUrl, wasmUrl, faceDetectorUrl, glareModelUr
   }
   if (!glareSession) glareSession = await onnxRuntime.InferenceSession.create(glareModelBytes, cpuSessionOptions);
   glareInputName = glareSession.inputNames[0];
+  // The classifier follows the glare model's backend; a GPU failure here also degrades to CPU.
+  if (activeBackend === "webgpu") {
+    try {
+      glassesClassifierSession = await onnxRuntime.InferenceSession.create(glassesClassifierBytes, { executionProviders: ["webgpu"], graphOptimizationLevel: "all" });
+    } catch (webgpuError) {
+      post({ type: "notice", message: `WebGPU classifier session failed, using CPU: ${webgpuError.message}` });
+    }
+  }
+  if (!glassesClassifierSession) glassesClassifierSession = await onnxRuntime.InferenceSession.create(glassesClassifierBytes, cpuSessionOptions);
   await warmUpGlareModel();
+  await runGlassesClassifier(new Float32Array(3 * 256 * 512), 512, 256);
   post({
     type: "ready",
     backend: activeBackend,
@@ -117,6 +135,16 @@ async function runGlareModel(cropPlanarRgb, cropWidth, cropHeight) {
   outputs.masks.dispose?.();
   glareInferenceMs.push(performance.now() - inferenceStarted);
   return { cleanPlanarRgb, masksPlanar };
+}
+
+/** The gate's model: glasses_probability for one 1x eye crop (same tensor as the glare model's). */
+async function runGlassesClassifier(cropPlanarRgb, cropWidth, cropHeight) {
+  const inputTensor = new onnxRuntime.Tensor("float32", cropPlanarRgb, [1, 3, cropHeight, cropWidth]);
+  const outputs = await glassesClassifierSession.run({ eye_crop: inputTensor });
+  const glassesProbability = (await outputs.glasses_probability.getData())[0];
+  inputTensor.dispose?.();
+  outputs.glasses_probability.dispose?.();
+  return glassesProbability;
 }
 
 /** Reads photo rects out of a decoded ImageBitmap through one reusable small canvas. */
@@ -169,7 +197,7 @@ async function makePreview(photoBitmap, previewLongSide) {
   return createImageBitmap(photoBitmap, { resizeWidth, resizeHeight, resizeQuality: "high" });
 }
 
-async function processPhoto({ requestId, file, previewLongSide, highResPassEnabled }) {
+async function processPhoto({ requestId, file, previewLongSide, highResPassEnabled, glassesProbabilityThreshold }) {
   const timings = {};
   let started = performance.now();
   let photoBitmap;
@@ -191,13 +219,14 @@ async function processPhoto({ requestId, file, previewLongSide, highResPassEnabl
     const faces = [];
     // The visible photo's region cache adopts these right away; faces themselves stay crop-space.
     const regionOriginalRgbaByFace = [];
+    const thumbnailBitmapByFace = [];
     const transfer = [];
     timings.facePassMs = [];
     glareInferenceMs = [];
     for (const [faceIndex, face] of detectedFaces.entries()) {
       post({ type: "stage", requestId, stage: "cleaning", faceIndex, faceCount: detectedFaces.length });
       started = performance.now();
-      const pass = await runGlarePassOnFace({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, highResPassEnabled });
+      const { faceResult: pass, eyeCrop } = await runFaceThroughGlassesGate({ face, photoWidth, photoHeight, readPhotoRegion, runGlassesClassifier, runGlareModel, glassesProbabilityThreshold, highResPassEnabled });
       timings.facePassMs.push(performance.now() - started);
       faces.push({
         imageLeftEyeXY: face.imageLeftEyeXY,
@@ -206,6 +235,8 @@ async function processPhoto({ requestId, file, previewLongSide, highResPassEnabl
         detectionScore: face.detectionScore,
         ...pass,
       });
+      thumbnailBitmapByFace.push(await makeEyeCropThumbnail(eyeCrop.cropPlanarRgb, eyeCrop.cropWidth, eyeCrop.cropHeight));
+      transfer.push(thumbnailBitmapByFace[faceIndex], ...(pass.cropRgbPlanes ?? []).map((plane) => plane.buffer));
       regionOriginalRgbaByFace.push(pass.hasGlare ? readPhotoRegion(pass.region) : null);
       if (pass.hasGlare) {
         transfer.push(regionOriginalRgbaByFace[faceIndex].buffer, ...pass.cropDeltaLayers.map((layer) => layer.buffer), pass.cropGlareMask.buffer);
@@ -216,7 +247,25 @@ async function processPhoto({ requestId, file, previewLongSide, highResPassEnabl
     timings.previewMs = performance.now() - started;
     timings.glareInferenceOnlyMs = glareInferenceMs;
     transfer.push(previewBitmap);
-    post({ type: "result", requestId, photoWidth, photoHeight, faces, regionOriginalRgbaByFace, previewBitmap, timings, backend: activeBackend }, transfer);
+    post({ type: "result", requestId, photoWidth, photoHeight, faces, regionOriginalRgbaByFace, thumbnailBitmapByFace, previewBitmap, timings, backend: activeBackend }, transfer);
+  } finally {
+    photoBitmap.close();
+  }
+}
+
+/**
+ * "Force on" for a face the gate skipped: run the glare model on the crop the page kept. The
+ * photo is decoded again only to read the face's region bytes for the page (and for the 2x pass).
+ */
+async function runFace({ requestId, file, face, photoWidth, photoHeight, highResPassEnabled }) {
+  const photoBitmap = await decodePhoto(file);
+  try {
+    const readPhotoRegion = createPhotoRegionReader(photoBitmap);
+    const started = performance.now();
+    const faceResult = await runSkippedFaceGlarePass({ face, photoWidth, photoHeight, readPhotoRegion, runGlareModel, highResPassEnabled });
+    const regionOriginalRgba = faceResult.hasGlare ? readPhotoRegion(faceResult.region) : null;
+    const transfer = faceResult.hasGlare ? [regionOriginalRgba.buffer, ...faceResult.cropDeltaLayers.map((layer) => layer.buffer), faceResult.cropGlareMask.buffer] : [];
+    post({ type: "face-result", requestId, face: faceResult, regionOriginalRgba, facePassMs: performance.now() - started }, transfer);
   } finally {
     photoBitmap.close();
   }
@@ -264,6 +313,7 @@ self.onmessage = async (event) => {
   try {
     if (message.type === "init") return await initialize(message);
     if (message.type === "process-photo") return await processPhoto(message);
+    if (message.type === "run-face") return await runFace(message);
     if (message.type === "read-regions") return await readRegions(message);
     if (message.type === "export-photo") return await exportPhoto(message);
   } catch (error) {

@@ -5,6 +5,9 @@
  */
 
 import { warpFaceGlareMaskToRegion } from "./blend/face_region_patch.js";
+import { computePhotoToEyeCropAffine, EYE_CROP_HEIGHT, EYE_CROP_WIDTH } from "./eye_crop_geometry.js";
+import { computePhotoRegionCoveredByEyeCrop } from "./pipeline/eye_crop_warp.js";
+import { faceSwitchState } from "./ui/face_switch_state.js";
 
 /** Typed arrays reachable from a face result object (one level of arrays/objects deep). */
 function listTypedArrays(face) {
@@ -39,14 +42,21 @@ export function installDebugHookWhenRequested({ jobs, visibleRegions, exportJob,
         lastExport: job.lastExport,
         photoWidth: job.result?.photoWidth,
         photoHeight: job.result?.photoHeight,
-        faces: job.result?.faces.map((face) => ({
+        faces: job.result?.faces.map((face, faceIndex) => ({
           imageLeftEyeXY: face.imageLeftEyeXY,
           imageRightEyeXY: face.imageRightEyeXY,
           detectionScore: face.detectionScore,
+          glassesProbability: face.glassesProbability,
+          glassesDetected: face.glassesDetected,
+          glareRun: face.glareRun,
+          switchState: faceSwitchState(face.glassesDetected, job.card.overriddenByFace[faceIndex]),
+          switchedOn: job.card.isFaceOn(faceIndex),
           hasGlare: face.hasGlare,
           showLostDetailNote: face.showLostDetailNote,
           glareFraction: face.glareFraction,
           region: face.region,
+          // The photo rect this face's 1x eye crop covers, whether or not the glare model ran.
+          cropCoverageRegion: computePhotoRegionCoveredByEyeCrop(computePhotoToEyeCropAffine(face.imageLeftEyeXY, face.imageRightEyeXY), EYE_CROP_WIDTH, EYE_CROP_HEIGHT, job.result.photoWidth, job.result.photoHeight),
         })),
       })),
       pageTimings,

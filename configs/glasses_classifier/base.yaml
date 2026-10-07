@@ -1,0 +1,67 @@
+# Glasses classifier (the app's "does this face wear glasses?" gate). Compose with:
+#   python -m glasses_classifier.build_eye_crop_cache   (once; reads CACHE)
+#   python -m glasses_classifier.train [--config configs/glasses_classifier/base.yaml] [KEY=VALUE ...]
+GLOBAL:
+  SEED: 42
+
+CACHE:
+  DIRECTORY: /Volumes/vega/datasets/glare-off/glasses-classifier/crop_cache
+  SPLITS: [train, val, test, real_glare_eval]
+  TRAIN_VARIANTS: 3          # jittered crops per train face; the last one goes through the phone-capture simulation
+  SEED: 20261006
+  BUILD_PROCESSES: 3
+  EYE_JITTER:                # fractions of eye distance, degrees for roll (same as glare_model)
+    PER_EYE_NOISE_FRACTION: 0.03
+    ROLL_DEGREES: 3.0
+    SCALE_FRACTION: 0.05
+    SHIFT_FRACTION: 0.03
+  PHONE_CAPTURE:             # glare_model's PhoneCaptureSimulationSettings; PROBABILITY is unused (variant K-1 always simulates)
+    PROBABILITY: 1.0
+    CROP_SCALE_RANGE: [0.15, 0.6]
+    JPEG_PROBABILITY: 0.5
+    JPEG_QUALITY_RANGE: [70, 95]
+    NOISE_PROBABILITY: 0.5
+    NOISE_SIGMA_RANGE: [0.002, 0.012]
+
+AUGMENTATION:                # applied at load time to train crops only
+  PHOTOMETRIC:               # half-widths of uniform jitter around 1.0 (glare_model's apply_photometric_jitter)
+    BRIGHTNESS: 0.25
+    CONTRAST: 0.2
+    GAMMA: 0.2
+    SATURATION: 0.3
+    WHITE_BALANCE: 0.08
+    HORIZONTAL_FLIP_PROBABILITY: 0.5
+  GRAYSCALE_PROBABILITY: 0.1 # black-and-white photos exist; frames must not be learned from color
+
+MODEL:
+  STEM_CHANNELS: 32
+  BLOCK_SPECS: [[48, 1], [64, 2], [96, 1], [128, 2], [192, 1], [256, 2], [256, 1]]
+  DROPOUT: 0.2
+
+DATALOADER:
+  BATCH_SIZE: 32
+  NUM_WORKERS: 2             # hard cap 2 on this shared machine (validated)
+  CLASS_BALANCED_SAMPLING: true   # glasses faces outnumber bare faces ~4.5:1 in train
+
+SOLVER:
+  EPOCHS: 12
+  WARMUP_EPOCHS: 1
+  BASE_LR: 0.003
+  MIN_LR: 0.00003
+  WEIGHT_DECAY: 0.0001
+
+TRAIN:
+  DEVICE: auto               # auto = cuda > mps > cpu
+  MPS_HIGH_WATERMARK_RATIO: 0.2
+  MPS_LOW_WATERMARK_RATIO: 0.15   # must be <= the high ratio or torch 2.14 refuses to init MPS
+  LOG_PERIOD: 50
+
+EVALUATION:
+  DEFAULT_THRESHOLD: 0.5
+  # Threshold choice on val: keep DEFAULT_THRESHOLD unless its glasses recall is below this, then lower it
+  # (a missed glasses face loses its glare fix; a bare face run through the glare model costs only time).
+  MIN_GLASSES_RECALL: 0.98
+
+OUTPUT:
+  RUNS_ROOT: /Volumes/vega/datasets/glare-off/glasses-classifier/runs
+  RUN_NAME: run02            # the shipped model (Oct 6 2026); pick a new name for a retrain

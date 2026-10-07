@@ -10,7 +10,15 @@ export const APP_SLUG = "glare-off";
 export const MODEL_PATHS = {
   faceDetector: "models/face_detection_yunet_2023mar_dynamic_input.onnx",
   glareModel: "models/glare_removal.onnx",
+  glassesClassifier: "models/glasses_classifier.onnx",
 };
+
+// The glasses gate: a face goes to the glare model only when the classifier's
+// glasses_probability is at least this. Faces below it are skipped (the visitor can force them on).
+// Below 0.5 on purpose: missed glasses faces scored 0.37-0.38 on test, bare faces <= 0.09 on val, and a bare face let through costs nothing (empty mask).
+export const GLASSES_PROBABILITY_THRESHOLD = 0.3;
+// Pixel width of each face picker thumbnail (the tile shows it at half this, 2x for sharp phones).
+export const EYE_CROP_THUMBNAIL_WIDTH = 192;
 
 // onnxruntime-web 1.30.0, vendored from the npm tarball (app/THIRD_PARTY.md). Two builds:
 // the WebGPU build (its WASM carries both the GPU and CPU paths) and the smaller CPU-only one.

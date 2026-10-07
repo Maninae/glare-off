@@ -242,8 +242,7 @@
   gap: 0 var(--s5);
 }
 
-.view-option,
-.face-toggle {
+.view-option {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
@@ -251,8 +250,7 @@
   cursor: pointer;
 }
 
-.view-option input,
-.face-toggle input {
+.view-option input {
   width: 18px;
   height: 18px;
   margin: 0;
@@ -290,33 +288,80 @@ input[type="range"].strength-range {
   accent-color: var(--ink);
 }
 
-.face-list {
-  display: grid;
+/* ---------- Face picker: one tile per face, its eye crop in an ink frame over a chart label ---------- */
+
+.face-picker {
+  margin-top: var(--s4);
+}
+
+.face-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4) var(--s4);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.face-item-row {
+.face-tile {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--s5);
+  flex-direction: column;
+  gap: 4px;
+  width: calc(var(--face-crop-width) + 4px);
+  min-height: 44px;
+  padding: 2px 2px 4px;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font-family: var(--font-chart);
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: var(--chart-tracking);
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+  --face-crop-width: 96px;
 }
 
-.face-item-title {
-  min-width: 13ch;
+.face-tile-frame {
+  display: block;
+  outline: 2px solid var(--photo-frame);
+}
+
+.face-tile-crop {
+  display: block;
+  width: var(--face-crop-width);
+  height: calc(var(--face-crop-width) / 2);
+}
+
+.face-tile-name {
   color: var(--ink-gray);
 }
 
-.face-item-status {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
+.face-tile:hover .face-tile-label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Switched off: the face stays as it was, so its crop and label step back to gray. */
+.face-tile[data-switched-on="false"] .face-tile-crop {
+  opacity: 0.4;
+}
+
+.face-tile[data-switched-on="false"] .face-tile-label {
+  color: var(--ink-gray);
+}
+
+.face-tile:disabled {
+  cursor: progress;
+}
+
+.face-notes:empty {
+  display: none;
 }
 
 .face-note {
-  margin: 0 0 var(--s2);
+  margin: var(--s3) 0 0;
 }
 
 @media (max-width: 479px) {

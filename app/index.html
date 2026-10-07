@@ -136,7 +136,12 @@
       <input class="compare-range" type="range" min="0" max="100" step="0.5" value="50" aria-label="Before and after: drag to compare">
       <p class="compare-working"><span class="compare-working-text">Waiting</span></p>
     </div>
+    <!-- One tile per face: its eye crop and its state; a press switches glare removal for that face. -->
+    <div class="face-picker" role="group" aria-label="Faces in this photo" hidden>
+      <ul class="face-tiles"></ul>
+    </div>
     <p class="result-message" hidden></p>
+    <div class="face-notes"></div>
     <div class="result-controls" hidden>
       <fieldset class="view-picker">
         <legend>Show</legend>
@@ -146,7 +151,6 @@
         <span class="strength-label">Strength <output class="strength-value">100%</output></span>
         <input class="strength-range" type="range" min="0" max="100" step="1" value="100">
       </label>
-      <ul class="face-list"></ul>
     </div>
   </li>
 </template>

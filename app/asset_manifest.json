@@ -1,5 +1,5 @@
 {
- "version": "300d3290a55aad6e",
+ "version": "918ed9ce644fcade",
  "assets": [
   {
    "path": "404.html",
@@ -58,12 +58,12 @@
   },
   {
    "path": "index.html",
-   "bytes": 9713,
+   "bytes": 9949,
    "precache": true
   },
   {
    "path": "js/app_config.js",
-   "bytes": 1457,
+   "bytes": 2043,
    "precache": true
   },
   {
@@ -78,7 +78,7 @@
   },
   {
    "path": "js/debug_hook.js",
-   "bytes": 3059,
+   "bytes": 3921,
    "precache": true
   },
   {
@@ -88,7 +88,7 @@
   },
   {
    "path": "js/main.js",
-   "bytes": 12701,
+   "bytes": 11984,
    "precache": true
   },
   {
@@ -103,7 +103,7 @@
   },
   {
    "path": "js/photo/visible_photo_regions.js",
-   "bytes": 3338,
+   "bytes": 3973,
    "precache": true
   },
   {
@@ -117,18 +117,33 @@
    "precache": true
   },
   {
+   "path": "js/pipeline/eye_crop_thumbnail.js",
+   "bytes": 1320,
+   "precache": true
+  },
+  {
    "path": "js/pipeline/eye_crop_warp.js",
    "bytes": 7588,
    "precache": true
   },
   {
    "path": "js/pipeline/glare_crop_pass.js",
-   "bytes": 7343,
+   "bytes": 8176,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/glare_engine.js",
+   "bytes": 5383,
    "precache": true
   },
   {
    "path": "js/pipeline/glare_worker.js",
-   "bytes": 12772,
+   "bytes": 16076,
+   "precache": true
+  },
+  {
+   "path": "js/pipeline/glasses_gate_pass.js",
+   "bytes": 4256,
    "precache": true
   },
   {
@@ -138,7 +153,7 @@
   },
   {
    "path": "js/pipeline/worker_client.js",
-   "bytes": 4894,
+   "bytes": 5370,
    "precache": true
   },
   {
@@ -157,13 +172,23 @@
    "precache": true
   },
   {
+   "path": "js/ui/face_picker.js",
+   "bytes": 3892,
+   "precache": true
+  },
+  {
+   "path": "js/ui/face_switch_state.js",
+   "bytes": 1991,
+   "precache": true
+  },
+  {
    "path": "js/ui/input_doors.js",
    "bytes": 2914,
    "precache": true
   },
   {
    "path": "js/ui/result_card.js",
-   "bytes": 10974,
+   "bytes": 13966,
    "precache": true
   },
   {
@@ -182,13 +207,18 @@
    "precache": false
   },
   {
+   "path": "models/glasses_classifier.onnx",
+   "bytes": 366330,
+   "precache": false
+  },
+  {
    "path": "styles/page.css",
    "bytes": 8537,
    "precache": true
   },
   {
    "path": "styles/results.css",
-   "bytes": 6631,
+   "bytes": 7639,
    "precache": true
   },
   {

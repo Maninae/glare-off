@@ -18,7 +18,7 @@
  * is what makes browsers install the new version.
  */
 
-const ASSET_MANIFEST_VERSION = "300d3290a55aad6e";
+const ASSET_MANIFEST_VERSION = "918ed9ce644fcade";
 const APP_CACHE_NAME = `glare-off-app-${ASSET_MANIFEST_VERSION}`;
 const VENDOR_CACHE_NAME = "glare-off-vendor";
 const ISOLATION_HEADERS = {
