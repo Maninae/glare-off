@@ -16,8 +16,12 @@ Glare Off removes the reflections on eyeglass lenses in a photo. Drop in the pic
 **Yours, free, with nothing uploaded.** No account, no credits, no watermark, no "upgrade for full resolution".
 
 <p align="center">
-  <img src="assets/screenshot-first-screen.png" alt="The Glare Off page: a headline, a drop target for photos, and the note that nothing is uploaded." width="800">
+  <img src="assets/demo-ffhq_41192.jpg" alt="Before and after: window reflections on both lenses removed, the eyes visible again." width="800"><br>
+  <img src="assets/demo-ffhq_37442.jpg" alt="Before and after: a white reflection covering the left lens removed." width="800"><br>
+  <img src="assets/demo-ffhq_28993.jpg" alt="Before and after: a screen reflection in the right lens removed." width="800">
 </p>
+
+<p align="center"><sub>Before on the left, after on the right, straight out of the tool. Photos are public domain (credits at the end).</sub></p>
 
 ---
 
@@ -44,7 +48,7 @@ Then open <http://localhost:8080>. The first visit fetches about 15 MB (the runt
 ## Good to know
 
 > [!NOTE]
-> The glare-removal network is training right now. Until it lands, the page runs with a placeholder that leaves lenses unchanged. The repo will carry before/after examples the day it does.
+> This is version 0.1 of the network. It is strongest on white light: windows, ring lights, bright haze. Reflections of colored screen content mostly stay for now; the next model is training on more of them.
 
 - **Browsers**: current Chrome, Edge and Firefox on desktop; Safari on iPhone runs single-threaded and takes a few seconds per face.
 - **Formats**: JPEG, PNG, WebP, and HEIC where your browser can open it.
@@ -59,3 +63,5 @@ A small face finder locates each pair of eyes. A straightened strip around the g
 [CLAUDE.md](CLAUDE.md) is the map of the repo. [app/CLAUDE.md](app/CLAUDE.md) covers the site, [glare_model/CLAUDE.md](glare_model/CLAUDE.md) the network and training, [glare_synthesis/CLAUDE.md](glare_synthesis/CLAUDE.md) the glare renderer, [training_sources/CLAUDE.md](training_sources/CLAUDE.md) the data.
 
 Built for everyone who has ever retaken a photo because of their glasses. Issues and pull requests are welcome.
+
+<sub>Demo photos, all public domain (PDM 1.0), via the FFHQ collection: "Annual Award Nominee Official Portraits" by NNC Public Affairs Photography; "15-09-2003" by Presidencia (Argentina, 2001 to 2007); "IADC hosts Hemispheric Situation Conference" by the Inter-American Defense College.</sub>
